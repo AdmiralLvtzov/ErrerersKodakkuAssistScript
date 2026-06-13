@@ -11,7 +11,7 @@ namespace ErrerScriptNamespace
         name: "[妖星乱舞绝境战]P5地火绘制",
         territorys: [1363],
         guid: "b3f7c1a2-8d4e-4f6a-9c12-5e8a1b3d7f90",
-        version: "0.0.9",
+        version: "0.0.10",
         author: "Errer",
         note: "P5全套：地火步进圈 + 钢铁月环 + 核爆分散。\n" +
               "安全点暂注释，地火圈+钢铁月环+核爆分散正常。")]
@@ -72,10 +72,10 @@ namespace ErrerScriptNamespace
         public bool EnableWater { get; set; } = true;
 
         [UserSetting("地水延迟（ms）")]
-        public int WaterDelayMs { get; set; } = 5000;
+        public int WaterDelayMs { get; set; } = 4000;
 
         [UserSetting("地水显示时长（ms）")]
-        public int WaterDurationMs { get; set; } = 10000;
+        public int WaterDurationMs { get; set; } = 1800;
 
         [UserSetting("地水矩形宽度")]
         public float WaterWidth { get; set; } = 10f;
