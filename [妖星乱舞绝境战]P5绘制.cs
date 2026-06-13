@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Numerics;
 using KodakkuAssist.Module.Draw;
 using KodakkuAssist.Module.GameEvent;
@@ -11,13 +11,20 @@ namespace ErrerScriptNamespace
         name: "[妖星乱舞绝境战]P5地火绘制",
         territorys: [1363],
         guid: "b3f7c1a2-8d4e-4f6a-9c12-5e8a1b3d7f90",
-        version: "0.0.7",
+        version: "0.0.8",
         author: "Errer",
         note: "P5全套：地火步进圈 + 钢铁月环 + 核爆分散。\n" +
               "安全点暂注释，地火圈+钢铁月环+核爆分散正常。")]
     public class YW_P5FireScript
     {
         #region Settings
+
+        [UserSetting("-----全局-----")]
+        public bool _____Global_Settings_____ { get; set; } = true;
+
+        [UserSetting("绘制模式（Vfx=游戏原生 Imgui=屏幕覆盖）")]
+        public DrawModeSetting DrawMode { get; set; } = DrawModeSetting.Vfx;
+        public enum DrawModeSetting { Vfx, Imgui }
 
         [UserSetting("-----地火步进圈-----")]
         public bool _____Fire_Settings_____ { get; set; } = true;
@@ -155,6 +162,9 @@ namespace ErrerScriptNamespace
         private const string DrawPrefix = "Errer_YW_P5Fire";
         private static readonly Vector3 ArenaCenter = new(100f, 0f, 100f);
 
+        private DrawModeEnum DM => DrawMode == DrawModeSetting.Imgui ? DMG : DM;
+        private DrawModeEnum DMG => DMG; // 引导线始终用Imgui
+
         private int _fireCount;
 
         // ── 洪水2穿1：每4个读条为一组，异向配对 ──
@@ -212,7 +222,7 @@ namespace ErrerScriptNamespace
                     dp.Delay = delayMs;
                     dp.DestoryAt = destroyAtMs;
                     dp.ScaleMode = ScaleMode.None;
-                    accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
+                    accessory.Method.SendDraw(DM, DrawTypeEnum.Circle, dp);
                 }
             }
 
@@ -241,7 +251,7 @@ namespace ErrerScriptNamespace
                 dpSafe.Delay = safeDelay;
                 dpSafe.DestoryAt = safeDestroy;
                 dpSafe.ScaleMode = ScaleMode.None;
-                accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dpSafe);
+                accessory.Method.SendDraw(DM, DrawTypeEnum.Circle, dpSafe);
 
                 var dpGuide = accessory.Data.GetDefaultDrawProperties();
                 dpGuide.Name = $"{DrawPrefix}_Guide{pairIndex}";
@@ -252,7 +262,7 @@ namespace ErrerScriptNamespace
                 dpGuide.Color = GuideColor.V4;
                 dpGuide.Delay = safeDelay;
                 dpGuide.DestoryAt = safeDestroy;
-                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dpGuide);
+                accessory.Method.SendDraw(DMG, DrawTypeEnum.Displacement, dpGuide);
 
                 _hasPrev = false;
             }
@@ -283,7 +293,7 @@ namespace ErrerScriptNamespace
             dp.Color = SteelColor.V4;
             dp.DestoryAt = SteelDonutDurationMs;
             dp.ScaleMode = ScaleMode.None;
-            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
+            accessory.Method.SendDraw(DM, DrawTypeEnum.Circle, dp);
         }
 
         [ScriptMethod(name: "月环（龙卷）安全+危险", eventType: EventTypeEnum.StartCasting,
@@ -301,7 +311,7 @@ namespace ErrerScriptNamespace
             dpSafe.Color = DonutSafeColor.V4;
             dpSafe.DestoryAt = SteelDonutDurationMs;
             dpSafe.ScaleMode = ScaleMode.None;
-            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dpSafe);
+            accessory.Method.SendDraw(DM, DrawTypeEnum.Circle, dpSafe);
 
             // 外圈危险区（红色月环）
             var dpDanger = accessory.Data.GetDefaultDrawProperties();
@@ -313,7 +323,7 @@ namespace ErrerScriptNamespace
             dpDanger.Color = DonutDangerColor.V4;
             dpDanger.DestoryAt = SteelDonutDurationMs;
             dpDanger.ScaleMode = ScaleMode.None;
-            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Donut, dpDanger);
+            accessory.Method.SendDraw(DM, DrawTypeEnum.Donut, dpDanger);
         }
 
         #endregion
@@ -334,7 +344,7 @@ namespace ErrerScriptNamespace
             dp.Color = BusterColor.V4;
             dp.DestoryAt = BusterDurationMs;
             dp.ScaleMode = ScaleMode.None;
-            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
+            accessory.Method.SendDraw(DM, DrawTypeEnum.Circle, dp);
         }
 
         [ScriptMethod(name: "神圣（随机分散）", eventType: EventTypeEnum.StatusAdd,
@@ -351,7 +361,7 @@ namespace ErrerScriptNamespace
             dp.Color = SpreadColor.V4;
             dp.DestoryAt = SpreadDurationMs;
             dp.ScaleMode = ScaleMode.None;
-            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
+            accessory.Method.SendDraw(DM, DrawTypeEnum.Circle, dp);
         }
 
         #endregion
@@ -385,7 +395,7 @@ namespace ErrerScriptNamespace
             dp.Delay = WaterDelayMs;
             dp.DestoryAt = WaterDurationMs;
             dp.ScaleMode = ScaleMode.None;
-            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dp);
+            accessory.Method.SendDraw(DM, DrawTypeEnum.Rect, dp);
 
             // ── 洪水2穿1：每4个读条异向配对 ──
             if (EnableFloodSafe)
@@ -453,7 +463,7 @@ namespace ErrerScriptNamespace
             dpSafe.Delay = delayMs;
             dpSafe.DestoryAt = durationMs;
             dpSafe.ScaleMode = ScaleMode.None;
-            a.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dpSafe);
+            a.Method.SendDraw(DM, DrawTypeEnum.Circle, dpSafe);
 
             var dpGuide = a.Data.GetDefaultDrawProperties();
             dpGuide.Name = $"{DrawPrefix}_FloodGuide{idx}";
@@ -464,7 +474,7 @@ namespace ErrerScriptNamespace
             dpGuide.Color = new Vector4(0f, 1f, 1f, 1f);
             dpGuide.Delay = delayMs;
             dpGuide.DestoryAt = durationMs;
-            a.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dpGuide);
+            a.Method.SendDraw(DMG, DrawTypeEnum.Displacement, dpGuide);
         }
 
         #endregion
