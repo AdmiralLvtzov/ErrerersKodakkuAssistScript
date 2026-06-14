@@ -1,7 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
+using System.Threading.Tasks;
 using KodakkuAssist.Module.Draw;
 using KodakkuAssist.Module.GameEvent;
+using KodakkuAssist.Module.GameOperate;
 using KodakkuAssist.Script;
 using Newtonsoft.Json;
 
@@ -11,20 +15,13 @@ namespace ErrerScriptNamespace
         name: "[妖星乱舞绝境战]P5地火绘制",
         territorys: [1363],
         guid: "b3f7c1a2-8d4e-4f6a-9c12-5e8a1b3d7f90",
-        version: "0.0.10",
+        version: "0.0.11",
         author: "Errer",
-        note: "P5全套：地火步进圈 + 钢铁月环 + 核爆分散。\n" +
-              "安全点暂注释，地火圈+钢铁月环+核爆分散正常。")]
+        note: "P5全套：地火步进圈 + 钢铁月环 + 地水/洪水2穿1安全点 + 核爆/神圣分散。\n" +
+              "更新三星踩塔指路、地火后分散绘制。")]
     public class YW_P5FireScript
     {
         #region Settings
-
-        [UserSetting("-----全局-----")]
-        public bool _____Global_Settings_____ { get; set; } = true;
-
-        [UserSetting("绘制模式（Vfx=游戏原生 Imgui=屏幕覆盖）")]
-        public DrawModeSetting DrawMode { get; set; } = DrawModeSetting.Vfx;
-        public enum DrawModeSetting { Vfx, Imgui }
 
         [UserSetting("-----地火步进圈-----")]
         public bool _____Fire_Settings_____ { get; set; } = true;
@@ -134,6 +131,33 @@ namespace ErrerScriptNamespace
         [UserSetting("神圣显示时长（ms）")]
         public int SpreadDurationMs { get; set; } = 5000;
 
+        [UserSetting("-----咏唱中分散圈-----")]
+        public bool _____CastSpread_Settings_____ { get; set; } = true;
+
+        [UserSetting("启用咏唱中分散圈")]
+        public bool EnableCastSpread { get; set; } = true;
+
+        [UserSetting("咏唱中分散圈半径")]
+        public float CastSpreadRadius { get; set; } = 5f;
+
+        [UserSetting("咏唱中分散圈颜色")]
+        public ScriptColor CastSpreadColor { get; set; } = new ScriptColor { V4 = new Vector4(1.0f, 1.0f, 0.0f, 0.35f) };
+
+        [UserSetting("-----三星踩塔指路-----")]
+        public bool _____Tower_Settings_____ { get; set; } = true;
+
+        [UserSetting("启用三星踩塔指路")]
+        public bool EnableTowerGuide { get; set; } = true;
+
+        [UserSetting("踩塔只指路自己")]
+        public bool TowerGuideSelfOnly { get; set; } = true;
+
+        [UserSetting("踩塔Debug")]
+        public bool TowerDebug { get; set; } = false;
+
+        [UserSetting("踩塔线色")]
+        public ScriptColor TowerGuideColor { get; set; } = new ScriptColor { V4 = new Vector4(0f, 1f, 1f, 1f) };
+
         [UserSetting("-----颜色-----")]
         public bool _____Color_Settings_____ { get; set; } = true;
 
@@ -160,12 +184,36 @@ namespace ErrerScriptNamespace
         #region State
 
         private const string DrawPrefix = "Errer_YW_P5Fire";
+        private const string TowerPrefix = "Errer_P5T";
         private static readonly Vector3 ArenaCenter = new(100f, 0f, 100f);
+        private static readonly Vector3 TowerAnchorA = new(100f, 0f, 85f);
 
-        private DrawModeEnum DM => DrawMode == DrawModeSetting.Imgui ? DrawModeEnum.Imgui : DrawModeEnum.Default;
+        private const DrawModeEnum DM = DrawModeEnum.Default;
         private const DrawModeEnum DMG = DrawModeEnum.Imgui;
+        private const int TowerGuideDurationMs = 6500;
 
         private int _fireCount;
+
+        private enum TowerElement { Fire = 2015294, Ice = 2015295, Thunder = 2015296 }
+
+        private static readonly MarkType[] TowerMarks =
+        {
+            MarkType.Attack1, MarkType.Attack2, MarkType.Attack3, MarkType.Attack4,
+            MarkType.Stop1, MarkType.Stop2, MarkType.Bind1, MarkType.Bind2
+        };
+
+        private static readonly string[] TowerLabels = { "MT", "ST", "H1", "H2", "D1", "D2", "D3", "D4" };
+
+        private readonly object _towerLock = new();
+        private readonly Dictionary<Vector3, TowerElement> _towerRoundTowers = new();
+        private readonly Dictionary<int, (TowerElement Element, DateTime ExpireAt)> _towerDebuffs = new();
+        private readonly Dictionary<int, Vector3> _towerRawTargets = new();
+        private readonly Dictionary<int, int> _towerMarkOrder = new();
+        private readonly HashSet<TowerElement> _towerSeenDouble = new();
+        private readonly HashSet<int> _towerIdlePlayers = new();
+        private bool _towerCooling, _towerIdleLocked;
+        private int _towerMechanicSeq;
+        private int _towerRound;
 
         // ── 洪水2穿1：每4个读条为一组，异向配对 ──
         private int _floodCount;
@@ -185,7 +233,9 @@ namespace ErrerScriptNamespace
             _floodGroupCount = 0;
             _negCount = 0; _posCount = 0;
             _savedFloodSafe1 = null;
+            ResetTowerGuideState(true);
             accessory.Method.RemoveDraw($"{DrawPrefix}_.*");
+            accessory.Method.RemoveDraw($"{TowerPrefix}_.*");
         }
 
         #endregion
@@ -325,6 +375,301 @@ namespace ErrerScriptNamespace
             dpDanger.ScaleMode = ScaleMode.None;
             accessory.Method.SendDraw(DM, DrawTypeEnum.Donut, dpDanger);
         }
+
+        #endregion
+
+        #region 咏唱中分散圈
+
+        [ScriptMethod(name: "咏唱中分散圈", eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:47934"], userControl: false)]
+        public void OnCastSpread(Event @event, ScriptAccessory accessory)
+        {
+            if (!EnableCastSpread) return;
+
+            var durationMs = DurationMs(@event, 4700) + 1000;
+            for (var i = 0; i < Math.Min(8, accessory.Data.PartyList.Count); i++)
+            {
+                var dp = accessory.Data.GetDefaultDrawProperties();
+                dp.Name = $"{DrawPrefix}_CastSpread{i}";
+                dp.Owner = accessory.Data.PartyList[i];
+                dp.Scale = new Vector2(CastSpreadRadius);
+                dp.Color = CastSpreadColor.V4;
+                dp.DestoryAt = durationMs;
+                dp.ScaleMode = ScaleMode.None;
+                accessory.Method.SendDraw(DM, DrawTypeEnum.Circle, dp);
+            }
+        }
+
+        #endregion
+
+        #region 三星踩塔指路
+
+        [ScriptMethod(name: "三星踩塔机制开始", eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:47938"], userControl: false)]
+        public void OnTowerMechanicStart(Event @event, ScriptAccessory accessory)
+        {
+            if (!EnableTowerGuide) return;
+
+            int seq;
+            lock (_towerLock)
+            {
+                ClearTowerGuideState(false);
+                _towerCooling = false;
+                _towerIdleLocked = false;
+                seq = ++_towerMechanicSeq;
+                _towerRound = 0;
+            }
+
+            accessory.Method.RemoveDraw($"{TowerPrefix}_.*");
+            var delay = DurationMs(@event, 4700) + 1000;
+            if (TowerDebug) accessory.Method.SendChat($"/e [塔] 机制开始，{delay}ms 后锁定闲人");
+            _ = Task.Run(async () => { await Task.Delay(delay); LockTowerIdlePlayers(accessory, seq); });
+        }
+
+        [ScriptMethod(name: "三星踩塔塔收集", eventType: EventTypeEnum.ObjectEffect,
+            eventCondition: ["Id1:16"], userControl: false)]
+        public void OnTowerObjectEffect(Event @event, ScriptAccessory accessory)
+        {
+            if (!EnableTowerGuide) return;
+
+            var pos = JsonConvert.DeserializeObject<Vector3>(@event["SourcePosition"]);
+            if (!TryParseObjectId(@event["SourceId"], out var sourceId)) return;
+            var obj = accessory.Data.Objects.SearchById(sourceId);
+            if (obj == null) return;
+            var dataId = obj.DataId;
+            if (dataId is not (2015294 or 2015295 or 2015296)) return;
+
+            bool shouldAssign;
+            int count;
+            lock (_towerLock)
+            {
+                _towerRoundTowers.TryAdd(RoundTowerPos(pos), (TowerElement)dataId);
+                count = _towerRoundTowers.Count;
+                shouldAssign = count >= 4 && !_towerCooling;
+                if (shouldAssign) _towerCooling = true;
+            }
+
+            if (TowerDebug) accessory.Method.SendChat($"/e [塔] {DateTime.Now:HH:mm:ss.fff} {TowerElementLabel((TowerElement)dataId)} ({pos.X:F1},{pos.Z:F1}) n={count}");
+            if (shouldAssign) _ = Task.Run(async () => { await Task.Delay(800); AssignTowerGuides(accessory); });
+        }
+
+        [ScriptMethod(name: "三星踩塔易伤", eventType: EventTypeEnum.StatusAdd,
+            eventCondition: ["StatusID:regex:^(2902|2903|2998)$"], userControl: false)]
+        public void OnTowerDebuff(Event @event, ScriptAccessory accessory)
+        {
+            if (!EnableTowerGuide) return;
+            if (!TryParseObjectId(@event["TargetId"], out var targetId)) return;
+
+            var partyIndex = accessory.Data.PartyList.IndexOf(targetId);
+            if (partyIndex < 0) return;
+
+            var element = int.Parse(@event["StatusID"]) switch
+            {
+                2902 => TowerElement.Fire,
+                2903 => TowerElement.Ice,
+                2998 => TowerElement.Thunder,
+                _ => TowerElement.Fire
+            };
+            var expireAt = DateTime.Now.AddMilliseconds(DurationMs(@event, 20000));
+            lock (_towerLock) _towerDebuffs[partyIndex] = (element, expireAt);
+            if (TowerDebug) accessory.Method.SendChat($"/e [易伤] {TowerPlayerLabel(partyIndex)} → {TowerElementLabel(element)} until {expireAt:HH:mm:ss.fff}");
+        }
+
+        private void AssignTowerGuides(ScriptAccessory accessory)
+        {
+            List<(Vector3 Pos, TowerElement Element, float Angle)> towers;
+            Dictionary<int, (TowerElement Element, DateTime ExpireAt)> debuffs;
+            int round;
+            lock (_towerLock)
+            {
+                towers = _towerRoundTowers.Select(kv => (kv.Key, kv.Value, TowerAngle(kv.Key))).OrderBy(t => t.Item3).ToList();
+                _towerRoundTowers.Clear();
+                debuffs = _towerDebuffs.ToDictionary(kv => kv.Key, kv => kv.Value);
+                round = ++_towerRound;
+                _towerRawTargets.Clear();
+                _towerMarkOrder.Clear();
+                _towerCooling = false;
+            }
+
+            if (towers.Count != 4)
+            {
+                if (TowerDebug) accessory.Method.SendChat($"/e [塔] 第{round}轮塔数异常 {towers.Count}，跳过");
+                return;
+            }
+
+            var groups = towers.GroupBy(t => t.Element).ToDictionary(g => g.Key, g => g.ToList());
+            if (groups.Count != 3 || groups.Values.Count(g => g.Count == 2) != 1)
+            {
+                if (TowerDebug) accessory.Method.SendChat($"/e [塔] 第{round}轮元素分布异常 {string.Join(" ", groups.Select(g => $"{TowerElementLabel(g.Key)}x{g.Value.Count}"))}");
+                return;
+            }
+
+            var doubleElement = groups.First(g => g.Value.Count == 2).Key;
+            if (!_towerSeenDouble.Add(doubleElement) && TowerDebug) accessory.Method.SendChat($"/e [塔] 双塔元素重复：{TowerElementLabel(doubleElement)}");
+            if (TowerDebug)
+            {
+                accessory.Method.SendChat($"/e ═══ 第{round}轮 塔{towers.Count} 双{TowerElementLabel(doubleElement)} ═══");
+                foreach (var t in towers) accessory.Method.SendChat($"/e   {TowerElementLabel(t.Element)}塔 @({t.Pos.X:F1},{t.Pos.Z:F1}) ang={t.Angle:F2}");
+            }
+
+            var used = new HashSet<int>();
+            var markIndex = 0;
+            void Put(int partyIndex, Vector3 pos, string label)
+            {
+                if (markIndex >= TowerMarks.Length || partyIndex < 0 || partyIndex >= accessory.Data.PartyList.Count || !used.Add(partyIndex)) return;
+                lock (_towerLock)
+                {
+                    _towerRawTargets[partyIndex] = pos;
+                    _towerMarkOrder[partyIndex] = markIndex;
+                }
+                DrawTowerGuide(accessory, partyIndex, pos);
+                if (TowerDebug) accessory.Method.SendChat($"/e   分配 {TowerPlayerLabel(partyIndex)} debuff:{(debuffs.TryGetValue(partyIndex, out var d) ? TowerElementLabel(d.Element) : "无")} → {label}");
+                markIndex++;
+            }
+
+            var idlePlayers = GetTowerIdlePlayers();
+            var activeDebuffs = debuffs
+                .Where(kv => !idlePlayers.Contains(kv.Key) && kv.Value.ExpireAt > DateTime.Now.AddMilliseconds(3000))
+                .OrderBy(kv => kv.Key)
+                .ToList();
+            foreach (var kv in activeDebuffs)
+            {
+                var target = ClockwiseFirstDifferentTower(towers, kv.Value.Element);
+                if (target.HasValue) Put(kv.Key, target.Value.Pos, $"顺异:{TowerElementLabel(target.Value.Element)}");
+            }
+
+            var idleTarget = CounterClockwiseFromTowerAnchor(towers, doubleElement);
+            foreach (var partyIndex in idlePlayers)
+            {
+                if (markIndex >= TowerMarks.Length) break;
+                if (!used.Contains(partyIndex)) Put(partyIndex, idleTarget.Pos, $"逆双:{TowerElementLabel(doubleElement)}");
+            }
+
+            if (TowerDebug) TowerSummary(accessory, towers);
+        }
+
+        private void DrawTowerGuide(ScriptAccessory accessory, int partyIndex, Vector3 pos)
+        {
+            if (partyIndex >= accessory.Data.PartyList.Count) return;
+            var owner = accessory.Data.PartyList[partyIndex];
+            if (TowerGuideSelfOnly && owner != accessory.Data.Me) return;
+
+            int markIndex;
+            lock (_towerLock) markIndex = _towerMarkOrder.GetValueOrDefault(partyIndex, 0);
+            accessory.Method.Mark(owner, TowerMarks[Math.Clamp(markIndex, 0, TowerMarks.Length - 1)]);
+
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = $"{TowerPrefix}_g{partyIndex}";
+            dp.Owner = owner;
+            dp.TargetPosition = pos;
+            dp.Scale = new Vector2(1.5f);
+            dp.ScaleMode = ScaleMode.YByDistance;
+            dp.Color = TowerGuideColor.V4;
+            dp.DestoryAt = TowerGuideDurationMs;
+            accessory.Method.SendDraw(DMG, DrawTypeEnum.Displacement, dp);
+        }
+
+        private void LockTowerIdlePlayers(ScriptAccessory accessory, int seq)
+        {
+            List<int> idle;
+            int debuffCount;
+            lock (_towerLock)
+            {
+                if (seq != _towerMechanicSeq || _towerIdleLocked) return;
+                var now = DateTime.Now.AddMilliseconds(3000);
+                var active = _towerDebuffs.Where(kv => kv.Value.ExpireAt > now).Select(kv => kv.Key).ToHashSet();
+                idle = Enumerable.Range(0, Math.Min(8, accessory.Data.PartyList.Count)).Where(i => !active.Contains(i)).OrderBy(i => i).ToList();
+                debuffCount = active.Count;
+                _towerIdlePlayers.Clear();
+                foreach (var i in idle) _towerIdlePlayers.Add(i);
+                _towerIdleLocked = true;
+            }
+
+            if (TowerDebug) accessory.Method.SendChat($"/e [塔] 锁定闲人：{string.Join(" ", idle.Select(TowerPlayerLabel))} debuffs={debuffCount} idle={idle.Count}");
+        }
+
+        private List<int> GetTowerIdlePlayers()
+        {
+            lock (_towerLock)
+            {
+                return _towerIdlePlayers.OrderBy(i => i).ToList();
+            }
+        }
+
+        private void ResetTowerGuideState(bool advanceSeq)
+        {
+            lock (_towerLock)
+            {
+                ClearTowerGuideState(advanceSeq);
+                _towerCooling = false;
+                _towerIdleLocked = false;
+                _towerRound = 0;
+            }
+        }
+
+        private void ClearTowerGuideState(bool advanceSeq)
+        {
+            _towerRoundTowers.Clear();
+            _towerDebuffs.Clear();
+            _towerRawTargets.Clear();
+            _towerMarkOrder.Clear();
+            _towerSeenDouble.Clear();
+            _towerIdlePlayers.Clear();
+            if (advanceSeq) _towerMechanicSeq++;
+        }
+
+        private void TowerSummary(ScriptAccessory accessory, List<(Vector3 Pos, TowerElement Element, float Angle)> towers)
+        {
+            Dictionary<int, Vector3> raw;
+            lock (_towerLock) raw = new Dictionary<int, Vector3>(_towerRawTargets);
+            accessory.Method.SendChat("/e ── 踩塔汇总 ──");
+            foreach (var t in towers)
+            {
+                var who = string.Join(" ", Enumerable.Range(0, 8).Where(i => raw.ContainsKey(i) && RoundTowerPos(raw[i]) == RoundTowerPos(t.Pos)).Select(TowerPlayerLabel));
+                accessory.Method.SendChat($"/e   {TowerElementLabel(t.Element)}塔 @({t.Pos.X:F1},{t.Pos.Z:F1}) → {who}");
+            }
+        }
+
+        private static (Vector3 Pos, TowerElement Element, float Angle)? ClockwiseFirstDifferentTower(List<(Vector3 Pos, TowerElement Element, float Angle)> towers, TowerElement element)
+        {
+            var anchors = towers.Where(t => t.Element == element).OrderBy(t => t.Angle).ToList();
+            if (anchors.Count == 2 && ClockwiseTowerDelta(anchors[1].Angle, anchors[0].Angle) < ClockwiseTowerDelta(anchors[0].Angle, anchors[1].Angle))
+                anchors.Reverse();
+            foreach (var anchor in anchors)
+            {
+                var target = towers.Where(t => t.Element != element).OrderBy(t => ClockwiseTowerDelta(anchor.Angle, t.Angle)).FirstOrDefault();
+                if (target != default) return target;
+            }
+            return null;
+        }
+
+        private static (Vector3 Pos, TowerElement Element, float Angle) CounterClockwiseFromTowerAnchor(List<(Vector3 Pos, TowerElement Element, float Angle)> towers, TowerElement element)
+        {
+            var anchorAngle = TowerAngle(TowerAnchorA);
+            return towers.Where(t => t.Element == element).OrderBy(t => CounterClockwiseTowerDelta(anchorAngle, t.Angle)).First();
+        }
+
+        private static float ClockwiseTowerDelta(float from, float to) => (to - from + MathF.PI * 2f) % (MathF.PI * 2f);
+
+        private static float CounterClockwiseTowerDelta(float from, float to) => (from - to + MathF.PI * 2f) % (MathF.PI * 2f);
+
+        private static Vector3 RoundTowerPos(Vector3 pos) => new(MathF.Round(pos.X, 1), 0f, MathF.Round(pos.Z, 1));
+
+        private static float TowerAngle(Vector3 pos)
+        {
+            var angle = MathF.Atan2(pos.X - ArenaCenter.X, ArenaCenter.Z - pos.Z);
+            return angle < 0f ? angle + MathF.PI * 2f : angle;
+        }
+
+        private static string TowerElementLabel(TowerElement element) => element switch
+        {
+            TowerElement.Fire => "火",
+            TowerElement.Ice => "冰",
+            TowerElement.Thunder => "雷",
+            _ => "?"
+        };
+
+        private static string TowerPlayerLabel(int index) => index >= 0 && index < TowerLabels.Length ? TowerLabels[index] : $"P{index}";
 
         #endregion
 
