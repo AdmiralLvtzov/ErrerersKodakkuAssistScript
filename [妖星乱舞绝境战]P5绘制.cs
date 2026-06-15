@@ -15,7 +15,7 @@ namespace ErrerScriptNamespace
         name: "[妖星乱舞绝境战]P5全流程绘制",
         territorys: [1363],
         guid: "b3f7c1a2-8d4e-4f6a-9c12-5e8a1b3d7f90",
-        version: "0.0.13",
+        version: "0.0.16",
         author: "Errer",
         note: "P5全套：地火步进圈 + 钢铁月环 + 地水/洪水2穿1安全点 + 核爆/神圣分散。\n" +
               "更新三星踩塔指路、地火后分散绘制。")]
@@ -29,20 +29,8 @@ namespace ErrerScriptNamespace
         [UserSetting("启用步进圈绘制")]
         public bool EnableFireDraw { get; set; } = true;
 
-        [UserSetting("地火AOE圆圈半径")]
-        public float FireCircleRadius { get; set; } = 6f;
-
-        [UserSetting("步进距离（每个圈间距）")]
-        public float FireStepDistance { get; set; } = 7f;
-
-        [UserSetting("步进次数（画几个圈）")]
-        public int FireStepCount { get; set; } = 6;
-
         [UserSetting("提前显示（读条结束前多少ms开始画）")]
         public int AdvanceDrawMs { get; set; } = 1500;
-
-        [UserSetting("地火圈显示时长（ms）")]
-        public int DisplayDurationMs { get; set; } = 3500;
 
         [UserSetting("-----钢铁/月环（二选一的灾祟）-----")]
         public bool _____SteelDonut_Settings_____ { get; set; } = true;
@@ -50,38 +38,11 @@ namespace ErrerScriptNamespace
         [UserSetting("启用钢铁月环绘制")]
         public bool EnableSteelDonut { get; set; } = true;
 
-        [UserSetting("钢铁范围半径")]
-        public float SteelRadius { get; set; } = 10f;
-
-        [UserSetting("月环安全圈半径")]
-        public float DonutInnerRadius { get; set; } = 10f;
-
-        [UserSetting("月环危险圈外径")]
-        public float DonutOuterRadius { get; set; } = 50f;
-
-        [UserSetting("钢铁/月环显示时长（ms）")]
-        public int SteelDonutDurationMs { get; set; } = 8000;
-
         [UserSetting("-----地水（矩形AOE）-----")]
         public bool _____Water_Settings_____ { get; set; } = true;
 
         [UserSetting("启用地水绘制")]
         public bool EnableWater { get; set; } = true;
-
-        [UserSetting("地水延迟（ms）")]
-        public int WaterDelayMs { get; set; } = 4000;
-
-        [UserSetting("地水显示时长（ms）")]
-        public int WaterDurationMs { get; set; } = 1800;
-
-        [UserSetting("地水矩形宽度")]
-        public float WaterWidth { get; set; } = 10f;
-
-        [UserSetting("地水矩形长度")]
-        public float WaterLength { get; set; } = 60f;
-
-        [UserSetting("地水后偏移")]
-        public float WaterBackOffset { get; set; } = 30f;
 
         [UserSetting("地水颜色")]
         public ScriptColor WaterColor { get; set; } = new ScriptColor { V4 = new Vector4(1.0f, 1.0f, 0.0f, 0.35f) };
@@ -92,23 +53,11 @@ namespace ErrerScriptNamespace
         [UserSetting("启用洪水2穿1安全点")]
         public bool EnableFloodSafe { get; set; } = true;
 
-        [UserSetting("洪水安全点距场中距离（米）")]
-        public float FloodSafeDistance { get; set; } = 13.5f;
-
         [UserSetting("洪水安全点最大距离（米）")]
         public float FloodMaxDist { get; set; } = 8f;
 
-        [UserSetting("洪水2交点延迟（ms）")]
-        public int Flood2DelayMs { get; set; } = 0;
-
-        [UserSetting("洪水2交点持续（ms）")]
-        public int Flood2DurationMs { get; set; } = 3500;
-
-        [UserSetting("洪水1交点延迟（ms）")]
-        public int Flood1DelayMs { get; set; } = 3500;
-
-        [UserSetting("洪水1交点持续（ms）")]
-        public int Flood1DurationMs { get; set; } = 3000;
+        [UserSetting("启用洪水中间节点")]
+        public bool EnableFloodMidNode { get; set; } = true;
 
         [UserSetting("Debug：打印洪水交点坐标")]
         public bool FloodDebug { get; set; } = false;
@@ -119,26 +68,11 @@ namespace ErrerScriptNamespace
         [UserSetting("启用核爆分散绘制")]
         public bool EnableBusterSpread { get; set; } = true;
 
-        [UserSetting("核爆（双T死刑）范围半径")]
-        public float BusterRadius { get; set; } = 25f;
-
-        [UserSetting("核爆显示时长（ms）")]
-        public int BusterDurationMs { get; set; } = 4000;
-
-        [UserSetting("神圣（随机分散）范围半径")]
-        public float SpreadRadius { get; set; } = 5f;
-
-        [UserSetting("神圣显示时长（ms）")]
-        public int SpreadDurationMs { get; set; } = 5000;
-
         [UserSetting("-----咏唱中分散圈-----")]
         public bool _____CastSpread_Settings_____ { get; set; } = true;
 
         [UserSetting("启用咏唱中分散圈")]
         public bool EnableCastSpread { get; set; } = true;
-
-        [UserSetting("咏唱中分散圈半径")]
-        public float CastSpreadRadius { get; set; } = 5f;
 
         [UserSetting("咏唱中分散圈颜色")]
         public ScriptColor CastSpreadColor { get; set; } = new ScriptColor { V4 = new Vector4(1.0f, 1.0f, 0.0f, 0.35f) };
@@ -157,6 +91,9 @@ namespace ErrerScriptNamespace
 
         [UserSetting("踩塔Debug")]
         public bool TowerDebug { get; set; } = false;
+
+        [UserSetting("踩塔分配最大等待ms")]
+        public int TowerAssignMaxWaitMs { get; set; } = 2500;
 
         [UserSetting("踩塔线色")]
         public ScriptColor TowerGuideColor { get; set; } = new ScriptColor { V4 = new Vector4(0f, 1f, 1f, 1f) };
@@ -194,6 +131,35 @@ namespace ErrerScriptNamespace
         private const DrawModeEnum DM = DrawModeEnum.Default;
         private const DrawModeEnum DMG = DrawModeEnum.Imgui;
         private const int TowerGuideDurationMs = 6500;
+        private const float FireCircleRadius = 6f;
+        private const float FireStepDistance = 7f;
+        private const int FireStepCount = 7;
+        private const int FireFirstExplosionDelayMs = 700;
+        private const int FireExplosionIntervalMs = 700;
+        private const int FireAfterExplosionKeepMs = 0;
+        private const float SteelRadius = 10f;
+        private const float DonutInnerRadius = 10f;
+        private const float DonutOuterRadius = 50f;
+        private const int SteelDonutDurationMs = 8000;
+        private const int WaterDelayMs = 4000;
+        private const int WaterDurationMs = 1800;
+        private const float WaterWidth = 10f;
+        private const float WaterLength = 60f;
+        private const float WaterBackOffset = 30f;
+        private const float FloodSafeDistance = 13.5f;
+        private const int Flood2DelayMs = 0;
+        private const int Flood2DurationMs = 3500;
+        private const int Flood1DelayMs = 3500;
+        private const int Flood1DurationMs = 3000;
+        private const int FloodMidNodeDurationMs = 350;
+        private const float BusterRadius = 25f;
+        private const int BusterDurationMs = 4000;
+        private const float SpreadRadius = 5f;
+        private const int SpreadDurationMs = 5000;
+        private const float CastSpreadRadius = 5f;
+        private const int TowerNewDebuffMinRemainMs = 16000;
+        private const int TowerNewDebuffMaxRemainMs = 20000;
+        private const int TowerAssignPollMs = 100;
 
         private int _fireCount;
 
@@ -223,7 +189,9 @@ namespace ErrerScriptNamespace
         private int _floodGroupCount;
         private readonly Vector3[] _floodNegPos = new Vector3[2]; private readonly float[] _floodNegRot = new float[2]; private int _negCount;
         private readonly Vector3[] _floodPosPos = new Vector3[2]; private readonly float[] _floodPosRot = new float[2]; private int _posCount;
+        private readonly float[] _floodSeqRot = new float[4]; private int _seqCount;
         private Vector3? _savedFloodSafe1;
+        private Vector3? _savedFloodMid1;
 
         #endregion
 
@@ -234,8 +202,9 @@ namespace ErrerScriptNamespace
             _fireCount = 0;
             _floodCount = 0;
             _floodGroupCount = 0;
-            _negCount = 0; _posCount = 0;
+            _negCount = 0; _posCount = 0; _seqCount = 0;
             _savedFloodSafe1 = null;
+            _savedFloodMid1 = null;
             ResetTowerGuideState(true);
             accessory.Method.RemoveDraw($"{DrawPrefix}_.*");
             accessory.Method.RemoveDraw($"{TowerPrefix}_.*");
@@ -258,7 +227,6 @@ namespace ErrerScriptNamespace
             var rot = float.Parse(@event["SourceRotation"]);
             var castDurationMs = DurationMs(@event, 5000);
             var delayMs = Math.Max(0, castDurationMs - AdvanceDrawMs);
-            var destroyAtMs = delayMs + DisplayDurationMs;
 
             if (EnableFireDraw)
             {
@@ -266,6 +234,8 @@ namespace ErrerScriptNamespace
                 var fireColor = FireDangerColor.V4;
                 for (var i = 0; i < FireStepCount; i++)
                 {
+                    var explodeAtMs = castDurationMs + FireFirstExplosionDelayMs + FireExplosionIntervalMs * i;
+                    var visibleDurationMs = Math.Max(1, explodeAtMs - delayMs + FireAfterExplosionKeepMs);
                     var circlePos = pos + dir * (FireStepDistance * i);
                     var dp = accessory.Data.GetDefaultDrawProperties();
                     dp.Name = $"{DrawPrefix}_Fire{round}_Step{i}";
@@ -273,7 +243,7 @@ namespace ErrerScriptNamespace
                     dp.Scale = new Vector2(FireCircleRadius);
                     dp.Color = fireColor;
                     dp.Delay = delayMs;
-                    dp.DestoryAt = destroyAtMs;
+                    dp.DestoryAt = visibleDurationMs;
                     dp.ScaleMode = ScaleMode.None;
                     accessory.Method.SendDraw(DM, DrawTypeEnum.Circle, dp);
                 }
@@ -453,7 +423,7 @@ namespace ErrerScriptNamespace
             }
 
             if (TowerDebug) accessory.Method.SendChat($"/e [塔] {DateTime.Now:HH:mm:ss.fff} {TowerElementLabel((TowerElement)dataId)} ({pos.X:F1},{pos.Z:F1}) n={count}");
-            if (shouldAssign) _ = Task.Run(async () => { await Task.Delay(800); AssignTowerGuides(accessory); });
+            if (shouldAssign) _ = Task.Run(async () => await WaitAndAssignTowerGuides(accessory));
         }
 
         [ScriptMethod(name: "三星踩塔易伤", eventType: EventTypeEnum.StatusAdd,
@@ -476,6 +446,22 @@ namespace ErrerScriptNamespace
             var expireAt = DateTime.Now.AddMilliseconds(DurationMs(@event, 20000));
             lock (_towerLock) _towerDebuffs[partyIndex] = (element, expireAt);
             if (TowerDebug) accessory.Method.SendChat($"/e [易伤] {TowerPlayerLabel(partyIndex)} → {TowerElementLabel(element)} until {expireAt:HH:mm:ss.fff}");
+        }
+
+        private async Task WaitAndAssignTowerGuides(ScriptAccessory accessory)
+        {
+            var waited = 0;
+            var pollMs = Math.Max(50, TowerAssignPollMs);
+            var maxWaitMs = Math.Max(0, TowerAssignMaxWaitMs);
+            while (waited < maxWaitMs)
+            {
+                if (CountCurrentTowerDebuffs() >= 6) break;
+                await Task.Delay(pollMs);
+                waited += pollMs;
+            }
+
+            if (TowerDebug) accessory.Method.SendChat($"/e [塔] 等待新易伤 {waited}ms count={CountCurrentTowerDebuffs()}/6");
+            AssignTowerGuides(accessory);
         }
 
         private void AssignTowerGuides(ScriptAccessory accessory)
@@ -531,10 +517,17 @@ namespace ErrerScriptNamespace
             }
 
             var idlePlayers = GetTowerIdlePlayers();
+            var now = DateTime.Now;
             var activeDebuffs = debuffs
-                .Where(kv => !idlePlayers.Contains(kv.Key) && kv.Value.ExpireAt > DateTime.Now.AddMilliseconds(3000))
+                .Where(kv => !idlePlayers.Contains(kv.Key))
+                .Where(kv =>
+                {
+                    var remainMs = (kv.Value.ExpireAt - now).TotalMilliseconds;
+                    return remainMs >= TowerNewDebuffMinRemainMs && remainMs <= TowerNewDebuffMaxRemainMs;
+                })
                 .OrderBy(kv => kv.Key)
                 .ToList();
+            if (TowerDebug) accessory.Method.SendChat($"/e [塔] 第{round}轮使用新易伤 {activeDebuffs.Count}/6 remain={TowerNewDebuffMinRemainMs}-{TowerNewDebuffMaxRemainMs}ms");
             foreach (var kv in activeDebuffs)
             {
                 var target = ClockwiseFirstDifferentTower(towers, kv.Value.Element);
@@ -549,6 +542,22 @@ namespace ErrerScriptNamespace
             }
 
             if (TowerDebug) TowerSummary(accessory, towers);
+        }
+
+        private int CountCurrentTowerDebuffs()
+        {
+            var idlePlayers = GetTowerIdlePlayers();
+            var now = DateTime.Now;
+            lock (_towerLock)
+            {
+                return _towerDebuffs
+                    .Where(kv => !idlePlayers.Contains(kv.Key))
+                    .Count(kv =>
+                    {
+                        var remainMs = (kv.Value.ExpireAt - now).TotalMilliseconds;
+                        return remainMs >= TowerNewDebuffMinRemainMs && remainMs <= TowerNewDebuffMaxRemainMs;
+                    });
+            }
         }
 
         private void DrawTowerGuide(ScriptAccessory accessory, int partyIndex, Vector3 pos)
@@ -748,8 +757,24 @@ namespace ErrerScriptNamespace
             // ── 洪水2穿1：每4个读条异向配对 ──
             if (EnableFloodSafe)
             {
-                if (rot < 0f && _negCount < 2) { _floodNegPos[_negCount] = pos; _floodNegRot[_negCount] = rot; _negCount++; }
-                else if (rot >= 0f && _posCount < 2) { _floodPosPos[_posCount] = pos; _floodPosRot[_posCount] = rot; _posCount++; }
+                if (_seqCount >= 4)
+                    _seqCount = 0;
+
+                _floodSeqRot[_seqCount] = rot;
+                _seqCount++;
+
+                if (rot < 0f && _negCount < 2)
+                {
+                    _floodNegPos[_negCount] = pos;
+                    _floodNegRot[_negCount] = rot;
+                    _negCount++;
+                }
+                else if (rot >= 0f && _posCount < 2)
+                {
+                    _floodPosPos[_posCount] = pos;
+                    _floodPosRot[_posCount] = rot;
+                    _posCount++;
+                }
 
                 if (_negCount >= 1 && _posCount >= 1 && _negCount + _posCount >= 4)
                 {
@@ -757,6 +782,7 @@ namespace ErrerScriptNamespace
 
                     // 遍历所有 neg×pos 组合，取距场中最近的交点
                     Vector3? best = null; float bestDist = float.MaxValue;
+                    int bestNegIndex = -1, bestPosIndex = -1;
                     for (int ni = 0; ni < _negCount; ni++)
                     for (int pi = 0; pi < _posCount; pi++)
                     {
@@ -765,17 +791,26 @@ namespace ErrerScriptNamespace
                         var pt = LineIntersection2D(_floodNegPos[ni], dn, _floodPosPos[pi], dpo);
                         if (pt == null) continue;
                         var d = Vector3.Distance(pt.Value, ArenaCenter);
-                        if (d < bestDist) { best = pt.Value; bestDist = d; }
+                        if (d < bestDist)
+                        {
+                            best = pt.Value;
+                            bestDist = d;
+                            bestNegIndex = ni;
+                            bestPosIndex = pi;
+                        }
                     }
-                    _negCount = 0; _posCount = 0;
 
                     if (best == null || bestDist > FloodMaxDist)
                     {
                         if (FloodDebug)
                             accessory.Method.SendChat($"/e [洪水] 组{_floodGroupCount} 交点距场中={bestDist:F1}m 超出阈值{FloodMaxDist:F1}m ✗");
+                        _negCount = 0; _posCount = 0;
+                        _seqCount = 0;
                         return;
                     }
                     var safePos = best.Value;
+
+                    _negCount = 0; _posCount = 0;
 
                     // 向场中偏移4米
                     var toCenter = ArenaCenter - safePos;
@@ -783,22 +818,149 @@ namespace ErrerScriptNamespace
                     if (toCenterLen > 0.001f)
                         safePos += toCenter / toCenterLen * 4f;
 
+                    var midPos = TryBuildFloodMidNode(safePos, bestNegIndex, bestPosIndex, out var node) ? node : (Vector3?)null;
+
                     if (FloodDebug)
+                    {
                         accessory.Method.SendChat($"/e [洪水] 组{_floodGroupCount} 交点=({safePos.X:F1},{safePos.Z:F1}) 距场中={bestDist:F1}m ✓");
+                        if (midPos.HasValue)
+                            accessory.Method.SendChat($"/e [洪水] 离散中间节点=({midPos.Value.X:F1},{midPos.Value.Z:F1})");
+                    }
 
                     if (_floodGroupCount == 1)
+                    {
                         _savedFloodSafe1 = safePos;
+                        _savedFloodMid1 = midPos;
+                    }
                     else if (_floodGroupCount == 2)
                     {
-                        DrawFloodSafe(accessory, safePos, 2, Flood2DelayMs, Flood2DurationMs);
-                        if (_savedFloodSafe1.HasValue)
-                            DrawFloodSafe(accessory, _savedFloodSafe1.Value, 1, Flood1DelayMs, Flood1DurationMs);
+                        if (_savedFloodSafe1.HasValue && _savedFloodMid1.HasValue)
+                            DrawFloodRoute(accessory, safePos, _savedFloodMid1.Value, _savedFloodSafe1.Value);
+                        else
+                        {
+                            DrawFloodSafe(accessory, safePos, 2, Flood2DelayMs, Flood2DurationMs);
+                            if (_savedFloodSafe1.HasValue)
+                                DrawFloodSafe(accessory, _savedFloodSafe1.Value, 1, Flood1DelayMs, Flood1DurationMs);
+                        }
+
+                        _savedFloodSafe1 = null;
+                        _savedFloodMid1 = null;
                     }
+
+                    _seqCount = 0;
                 }
             }
         }
 
-        private void DrawFloodSafe(ScriptAccessory a, Vector3 pos, int idx, int delayMs, int durationMs)
+        private bool TryBuildFloodMidNode(Vector3 safePos, int bestNegIndex, int bestPosIndex, out Vector3 node)
+        {
+            node = default;
+            if (!EnableFloodMidNode || _seqCount < 1 || bestNegIndex < 0 || bestPosIndex < 0) return false;
+
+            var radius = Vector3.Distance(safePos, ArenaCenter);
+            if (radius < 0.001f) return false;
+
+            var firstWaveIsNeg = _floodSeqRot[0] < 0f;
+            var source = firstWaveIsNeg ? _floodNegPos[bestNegIndex] : _floodPosPos[bestPosIndex];
+            var delta = safePos - ArenaCenter;
+
+            if (MathF.Abs(delta.X) >= MathF.Abs(delta.Z))
+            {
+                var north = new Vector3(ArenaCenter.X, 0f, ArenaCenter.Z - radius);
+                var south = new Vector3(ArenaCenter.X, 0f, ArenaCenter.Z + radius);
+                node = Vector3.Distance(source, north) <= Vector3.Distance(source, south) ? north : south;
+            }
+            else
+            {
+                var west = new Vector3(ArenaCenter.X - radius, 0f, ArenaCenter.Z);
+                var east = new Vector3(ArenaCenter.X + radius, 0f, ArenaCenter.Z);
+                node = Vector3.Distance(source, west) <= Vector3.Distance(source, east) ? west : east;
+            }
+
+            return true;
+        }
+
+        private void DrawFloodRoute(ScriptAccessory a, Vector3 safe2, Vector3 mid, Vector3 safe1)
+        {
+            var secondStart = Math.Max(0, Flood2DelayMs);
+            var firstResolve = Math.Max(secondStart, Flood1DelayMs);
+            var resolveInterval = Math.Max(1, Flood1DurationMs / 3);
+            var secondResolve = firstResolve + resolveInterval;
+            var endAt = Math.Max(secondStart + Flood2DurationMs, Flood1DelayMs + Flood1DurationMs);
+            if (secondResolve > endAt)
+                secondResolve = endAt;
+            var displayDuration = endAt;
+
+            var inactive = new Vector4(0.35f, 0.35f, 0.35f, 0.65f);
+            var active = new Vector4(0f, 1f, 1f, 1f);
+            var midActive = new Vector4(0f, 1f, 0.4f, 1f);
+            var finalActive = new Vector4(0f, 1f, 0f, 1f);
+
+            DrawFloodRoutePoint(a, "Route2_Base", safe2, 1.35f, 0, displayDuration, inactive);
+            DrawFloodRoutePoint(a, "RouteMid_Base", mid, 1.2f, 0, displayDuration, inactive);
+            DrawFloodRoutePoint(a, "Route1_Base", safe1, 1.35f, 0, displayDuration, inactive);
+            DrawFloodRouteLine(a, "Route_2_To_Mid_Base", safe2, mid, 0, displayDuration, inactive);
+            DrawFloodRouteLine(a, "Route_Mid_To_1_Base", mid, safe1, 0, displayDuration, inactive);
+
+            DrawFloodRoutePoint(a, "Route2_Active", safe2, 1.55f, secondStart, Math.Max(0, firstResolve - secondStart), active);
+            DrawFloodGuideTo(a, "RouteGuide_To_2", safe2, secondStart, Math.Max(0, firstResolve - secondStart), active);
+
+            DrawFloodRoutePoint(a, "RouteMid_Active", mid, 1.4f, firstResolve, Math.Max(0, secondResolve - firstResolve), midActive);
+            DrawFloodRouteLine(a, "Route_2_To_Mid_Active", safe2, mid, firstResolve, Math.Max(0, secondResolve - firstResolve), midActive);
+            DrawFloodGuideTo(a, "RouteGuide_To_Mid", mid, firstResolve, Math.Max(0, secondResolve - firstResolve), midActive);
+
+            DrawFloodRoutePoint(a, "Route1_Active", safe1, 1.55f, secondResolve, Math.Max(0, endAt - secondResolve), finalActive);
+            DrawFloodRouteLine(a, "Route_Mid_To_1_Active", mid, safe1, secondResolve, Math.Max(0, endAt - secondResolve), finalActive);
+        }
+
+        private void DrawFloodRoutePoint(ScriptAccessory a, string suffix, Vector3 pos, float radius, int delayMs, int durationMs, Vector4 color)
+        {
+            if (durationMs <= 0) return;
+
+            var dp = a.Data.GetDefaultDrawProperties();
+            dp.Name = $"{DrawPrefix}_Flood{suffix}";
+            dp.Position = pos;
+            dp.Scale = new Vector2(radius);
+            dp.Color = color;
+            dp.Delay = delayMs;
+            dp.DestoryAt = durationMs;
+            dp.ScaleMode = ScaleMode.None;
+            a.Method.SendDraw(DM, DrawTypeEnum.Circle, dp);
+        }
+
+        private void DrawFloodGuideTo(ScriptAccessory a, string suffix, Vector3 target, int delayMs, int durationMs, Vector4 color)
+        {
+            if (durationMs <= 0) return;
+
+            var dp = a.Data.GetDefaultDrawProperties();
+            dp.Name = $"{DrawPrefix}_Flood{suffix}";
+            dp.Owner = a.Data.Me;
+            dp.TargetPosition = target;
+            dp.Scale = new Vector2(1.5f);
+            dp.ScaleMode = ScaleMode.YByDistance;
+            dp.Color = color;
+            dp.Delay = delayMs;
+            dp.DestoryAt = durationMs;
+            a.Method.SendDraw(DMG, DrawTypeEnum.Displacement, dp);
+        }
+
+        private void DrawFloodRouteLine(ScriptAccessory a, string suffix, Vector3 from, Vector3 to, int delayMs, int durationMs, Vector4 color)
+        {
+            if (durationMs <= 0) return;
+
+            var dp = a.Data.GetDefaultDrawProperties();
+            dp.Name = $"{DrawPrefix}_Flood{suffix}";
+            dp.Position = from;
+            dp.TargetPosition = to;
+            dp.Scale = new Vector2(0.8f);
+            dp.ScaleMode = ScaleMode.YByDistance;
+            dp.Color = color;
+            dp.Delay = delayMs;
+            dp.DestoryAt = durationMs;
+            a.Method.SendDraw(DMG, DrawTypeEnum.Displacement, dp);
+        }
+
+        private void DrawFloodSafe(ScriptAccessory a, Vector3 pos, int idx, int delayMs, int durationMs, Vector3? midPos = null)
         {
             if (FloodDebug)
                 a.Method.SendChat($"/e [洪水] 绘制安全点{idx} pos=({pos.X:F1},{pos.Z:F1}) 延迟={delayMs}ms 持续={durationMs}ms");
@@ -813,6 +975,42 @@ namespace ErrerScriptNamespace
             dpSafe.ScaleMode = ScaleMode.None;
             a.Method.SendDraw(DM, DrawTypeEnum.Circle, dpSafe);
 
+            var guideDelay = delayMs;
+            var guideDuration = durationMs;
+
+            if (midPos.HasValue && EnableFloodMidNode)
+            {
+                var midDuration = Math.Min(Math.Max(0, FloodMidNodeDurationMs), durationMs);
+                if (midDuration > 0)
+                {
+                    var dpMid = a.Data.GetDefaultDrawProperties();
+                    dpMid.Name = $"{DrawPrefix}_FloodMid{idx}";
+                    dpMid.Position = midPos.Value;
+                    dpMid.Scale = new Vector2(1.2f);
+                    dpMid.Color = new Vector4(0f, 1f, 0.4f, 1f);
+                    dpMid.Delay = delayMs;
+                    dpMid.DestoryAt = midDuration;
+                    dpMid.ScaleMode = ScaleMode.None;
+                    a.Method.SendDraw(DM, DrawTypeEnum.Circle, dpMid);
+
+                    var dpMidGuide = a.Data.GetDefaultDrawProperties();
+                    dpMidGuide.Name = $"{DrawPrefix}_FloodMidGuide{idx}";
+                    dpMidGuide.Owner = a.Data.Me;
+                    dpMidGuide.TargetPosition = midPos.Value;
+                    dpMidGuide.Scale = new Vector2(1.5f);
+                    dpMidGuide.ScaleMode = ScaleMode.YByDistance;
+                    dpMidGuide.Color = new Vector4(0f, 1f, 0.4f, 1f);
+                    dpMidGuide.Delay = delayMs;
+                    dpMidGuide.DestoryAt = midDuration;
+                    a.Method.SendDraw(DMG, DrawTypeEnum.Displacement, dpMidGuide);
+
+                    guideDelay += midDuration;
+                    guideDuration -= midDuration;
+                }
+            }
+
+            if (guideDuration <= 0) return;
+
             var dpGuide = a.Data.GetDefaultDrawProperties();
             dpGuide.Name = $"{DrawPrefix}_FloodGuide{idx}";
             dpGuide.Owner = a.Data.Me;
@@ -820,8 +1018,8 @@ namespace ErrerScriptNamespace
             dpGuide.Scale = new Vector2(1.5f);
             dpGuide.ScaleMode = ScaleMode.YByDistance;
             dpGuide.Color = new Vector4(0f, 1f, 1f, 1f);
-            dpGuide.Delay = delayMs;
-            dpGuide.DestoryAt = durationMs;
+            dpGuide.Delay = guideDelay;
+            dpGuide.DestoryAt = guideDuration;
             a.Method.SendDraw(DMG, DrawTypeEnum.Displacement, dpGuide);
         }
 
