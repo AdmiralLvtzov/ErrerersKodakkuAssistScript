@@ -15,12 +15,27 @@ namespace ErrerScriptNamespace
         name: "[妖星乱舞绝境战]P5全流程绘制",
         territorys: [1363],
         guid: "b3f7c1a2-8d4e-4f6a-9c12-5e8a1b3d7f90",
-        version: "0.0.16",
+        version: "0.0.19",
         author: "Errer",
         note: "P5全套：地火步进圈 + 钢铁月环 + 地水/洪水2穿1安全点 + 核爆/神圣分散。\n" +
-              "更新三星踩塔指路、地火后分散绘制。")]
+              "更新三星踩塔指路、地火安全点引导、地火后分散绘制，修复地水路线中间点与Imgui指路。")]
     public class YW_P5FireScript
     {
+        public enum FireSafeStrategy
+        {
+            Auto,
+            None,
+            Center,
+            Up,
+            Down,
+            Left,
+            Right,
+            LeftUp,
+            RightUp,
+            LeftDown,
+            RightDown
+        }
+
         #region Settings
 
         [UserSetting("-----地火步进圈-----")]
@@ -31,6 +46,21 @@ namespace ErrerScriptNamespace
 
         [UserSetting("提前显示（读条结束前多少ms开始画）")]
         public int AdvanceDrawMs { get; set; } = 1500;
+
+        [UserSetting("启用地火安全点引导")]
+        public bool EnableFireSafeGuide { get; set; } = true;
+
+        [UserSetting("地火安全点方向")]
+        public FireSafeStrategy FireSafeDirection { get; set; } = FireSafeStrategy.Auto;
+
+        [UserSetting("地火安全点颜色")]
+        public ScriptColor FireSafeColor { get; set; } = new ScriptColor { V4 = new Vector4(0f, 1f, 0.4f, 1f) };
+
+        [UserSetting("地火路线颜色")]
+        public ScriptColor FireRouteColor { get; set; } = new ScriptColor { V4 = new Vector4(0f, 1f, 1f, 1f) };
+
+        [UserSetting("地火安全点Debug")]
+        public bool FireSafeDebug { get; set; } = false;
 
         [UserSetting("-----钢铁/月环（二选一的灾祟）-----")]
         public bool _____SteelDonut_Settings_____ { get; set; } = true;
@@ -58,6 +88,18 @@ namespace ErrerScriptNamespace
 
         [UserSetting("启用洪水中间节点")]
         public bool EnableFloodMidNode { get; set; } = true;
+
+        [UserSetting("洪水路线底色")]
+        public ScriptColor FloodRouteInactiveColor { get; set; } = new ScriptColor { V4 = new Vector4(0.35f, 0.35f, 0.35f, 0.65f) };
+
+        [UserSetting("洪水路线起点颜色")]
+        public ScriptColor FloodRouteStartColor { get; set; } = new ScriptColor { V4 = new Vector4(0f, 1f, 1f, 1f) };
+
+        [UserSetting("洪水路线中转颜色")]
+        public ScriptColor FloodRouteMidColor { get; set; } = new ScriptColor { V4 = new Vector4(0f, 1f, 0.4f, 1f) };
+
+        [UserSetting("洪水路线终点颜色")]
+        public ScriptColor FloodRouteFinalColor { get; set; } = new ScriptColor { V4 = new Vector4(0f, 1f, 0f, 1f) };
 
         [UserSetting("Debug：打印洪水交点坐标")]
         public bool FloodDebug { get; set; } = false;
@@ -124,6 +166,7 @@ namespace ErrerScriptNamespace
         #region State
 
         private const string DrawPrefix = "Errer_YW_P5Fire";
+        private const string FireSafePrefix = DrawPrefix + "_Safe";
         private const string TowerPrefix = "Errer_P5T";
         private static readonly Vector3 ArenaCenter = new(100f, 0f, 100f);
         private static readonly Vector3 TowerAnchorA = new(100f, 0f, 85f);
@@ -137,6 +180,17 @@ namespace ErrerScriptNamespace
         private const int FireFirstExplosionDelayMs = 700;
         private const int FireExplosionIntervalMs = 700;
         private const int FireAfterExplosionKeepMs = 0;
+        private const int FireHitBaseMs = 4069;
+        private const int FireHitIntervalMs = 513;
+        private const int FireWaveIntervalMs = 2500;
+        private const int FireGuideDurationMs = 18000;
+        private const int FireInitialPointDurationMs = 10000;
+        private const float FireSafeCenterRadius = 1.6f;
+        private const float FireRoutePointRadius = 1.25f;
+        private const float FireRouteOffset = 5f;
+        private const float FireDiagonalComponentOffset = 2.5f;
+        private const float FireRouteLineWidth = 0.8f;
+        private const float FireGuideWidth = 1.5f;
         private const float SteelRadius = 10f;
         private const float DonutInnerRadius = 10f;
         private const float DonutOuterRadius = 50f;
@@ -162,8 +216,26 @@ namespace ErrerScriptNamespace
         private const int TowerAssignPollMs = 100;
 
         private int _fireCount;
+        private int _fireCandidateLeftCol;
+        private int _fireCandidateRightCol;
+        private Vector3 _fireSafeCenter = ArenaCenter;
+        private bool _fireGuideInitialized;
+        private bool _fireGuideReady;
+        private bool _fireInitialPointDrawn;
+        private bool _fireRouteCompleted;
+        private bool _fireFirstHalfDrawn;
+        private readonly List<int> _fireGuideCols = new();
+        private readonly List<int> _fireGuideRels = new();
 
         private enum TowerElement { Fire = 2015294, Ice = 2015295, Thunder = 2015296 }
+
+        private static readonly FireSafeStrategy[] FireAutoStrategies =
+        {
+            FireSafeStrategy.Center, FireSafeStrategy.Center,
+            FireSafeStrategy.Left, FireSafeStrategy.Right,
+            FireSafeStrategy.Center, FireSafeStrategy.Center,
+            FireSafeStrategy.Up, FireSafeStrategy.Down
+        };
 
         private static readonly MarkType[] TowerMarks =
         {
@@ -200,6 +272,7 @@ namespace ErrerScriptNamespace
         public void Init(ScriptAccessory accessory)
         {
             _fireCount = 0;
+            ClearFireSafeGuideState();
             _floodCount = 0;
             _floodGroupCount = 0;
             _negCount = 0; _posCount = 0; _seqCount = 0;
@@ -214,14 +287,19 @@ namespace ErrerScriptNamespace
 
         #region 地火步进圈
 
+        [ScriptMethod(name: "地火安全点初始化", eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:47931"], userControl: false)]
+        public void OnFireSafeGuideStart(Event @event, ScriptAccessory accessory)
+        {
+            InitializeFireSafeGuide(accessory, true);
+        }
+
         [ScriptMethod(name: "地火步进圈", eventType: EventTypeEnum.StartCasting,
             eventCondition: ["ActionId:47932"], userControl: false)]
         public void OnFireCast(Event @event, ScriptAccessory accessory)
         {
             _fireCount++;
             var round = _fireCount;
-            // var isEven = round % 2 == 0;
-            // var pairIndex = (round + 1) / 2;
 
             var pos = JsonConvert.DeserializeObject<Vector3>(@event["SourcePosition"]);
             var rot = float.Parse(@event["SourceRotation"]);
@@ -249,53 +327,380 @@ namespace ErrerScriptNamespace
                 }
             }
 
-            // ── 安全点（暂注释）──
-            /*
-            if (isEven && _hasPrev)
+            if (EnableFireSafeGuide)
             {
-                var d1 = RotationToDirection(_prevRot);
-                var d2 = RotationToDirection(rot);
-                var pt = LineIntersection2D(_prevPos, d1, pos, d2);
-
-                Vector3 safePos;
-                if (pt != null)
-                    safePos = ClampToDistance(pt.Value, ArenaCenter, SafeDistance);
-                else
-                    safePos = FallbackSafePos(_prevPos, pos);
-
-                var safeDelay = delayMs;
-                var safeDestroy = safeDelay + SafeDisplayDurationMs;
-
-                var dpSafe = accessory.Data.GetDefaultDrawProperties();
-                dpSafe.Name = $"{DrawPrefix}_Safe{pairIndex}";
-                dpSafe.Position = safePos;
-                dpSafe.Scale = new Vector2(SafeCircleRadius);
-                dpSafe.Color = SafePointColor.V4;
-                dpSafe.Delay = safeDelay;
-                dpSafe.DestoryAt = safeDestroy;
-                dpSafe.ScaleMode = ScaleMode.None;
-                accessory.Method.SendDraw(DM, DrawTypeEnum.Circle, dpSafe);
-
-                var dpGuide = accessory.Data.GetDefaultDrawProperties();
-                dpGuide.Name = $"{DrawPrefix}_Guide{pairIndex}";
-                dpGuide.Owner = accessory.Data.Me;
-                dpGuide.TargetPosition = safePos;
-                dpGuide.Scale = new Vector2(1.5f);
-                dpGuide.ScaleMode = ScaleMode.YByDistance;
-                dpGuide.Color = GuideColor.V4;
-                dpGuide.Delay = safeDelay;
-                dpGuide.DestoryAt = safeDestroy;
-                accessory.Method.SendDraw(DMG, DrawTypeEnum.Displacement, dpGuide);
-
-                _hasPrev = false;
+                if (!_fireGuideInitialized)
+                    InitializeFireSafeGuide(accessory, false);
+                HandleFireSafeGuideCast(accessory, pos);
             }
-            else if (!isEven)
+        }
+
+        private void InitializeFireSafeGuide(ScriptAccessory accessory, bool resetFireCount)
+        {
+            if (resetFireCount)
+                _fireCount = 0;
+
+            ClearFireSafeGuideState();
+            _fireGuideInitialized = true;
+            RemoveFireSafeGuideDraws(accessory);
+
+            if (!EnableFireSafeGuide)
+                return;
+
+            var strategy = ResolveFireSafeStrategy(accessory);
+            (_fireCandidateLeftCol, _fireCandidateRightCol) = FireCandidateColumns(strategy);
+            _fireGuideReady = _fireCandidateLeftCol != 0 && _fireCandidateRightCol != 0;
+
+            if (!_fireGuideReady)
             {
-                _prevPos = pos;
-                _prevRot = rot;
-                _hasPrev = true;
+                if (FireSafeDebug)
+                    accessory.Method.SendChat($"/e [地火安全] 方向={strategy}，不启用安全点引导");
+                return;
             }
-            */
+
+            _fireSafeCenter = FireSafeCenter(_fireCandidateLeftCol, _fireCandidateRightCol);
+            DrawFirePoint(accessory, "Center", _fireSafeCenter, FireSafeCenterRadius, 0, FireGuideDurationMs, FireSafeColor.V4);
+
+            if (FireSafeDebug)
+                accessory.Method.SendChat($"/e [地火安全] 方向={strategy} L={_fireCandidateLeftCol} R={_fireCandidateRightCol} center=({_fireSafeCenter.X:F1},{_fireSafeCenter.Z:F1})");
+        }
+
+        private void ClearFireSafeGuideState()
+        {
+            _fireCandidateLeftCol = 0;
+            _fireCandidateRightCol = 0;
+            _fireSafeCenter = ArenaCenter;
+            _fireGuideInitialized = false;
+            _fireGuideReady = false;
+            _fireInitialPointDrawn = false;
+            _fireRouteCompleted = false;
+            _fireFirstHalfDrawn = false;
+            _fireGuideCols.Clear();
+            _fireGuideRels.Clear();
+        }
+
+        private void HandleFireSafeGuideCast(ScriptAccessory accessory, Vector3 pos)
+        {
+            if (!_fireGuideReady)
+                return;
+
+            var col = FireInitialColumn(pos.X);
+            if (col > 3)
+                return;
+
+            var isLeft = pos.X < ArenaCenter.X;
+            var candidateCol = isLeft ? _fireCandidateLeftCol : _fireCandidateRightCol;
+            if (candidateCol == 0)
+                return;
+
+            var rel = PositiveMod(col + 1 - candidateCol, 3);
+            _fireGuideCols.Add(col);
+            _fireGuideRels.Add(rel);
+            var n = _fireGuideRels.Count;
+
+            if (FireSafeDebug)
+                accessory.Method.SendChat($"/e [地火安全] n={n} side={(isLeft ? "左" : "右")} cols={string.Join(":", _fireGuideCols)} rels={string.Join(":", _fireGuideRels)}");
+
+            if (!_fireInitialPointDrawn && n <= 3 && rel != 0 && _fireGuideRels.Take(n - 1).All(r => r == 0))
+            {
+                DrawFireInitialPoint(accessory, n, rel);
+                _fireInitialPointDrawn = true;
+            }
+
+            if (_fireRouteCompleted || n < 2)
+                return;
+
+            if (n == 2)
+            {
+                var rel1 = _fireGuideRels[0];
+                var rel2 = _fireGuideRels[1];
+                if (rel1 != 0 && rel2 != 0)
+                    DrawFireFullRouteFrom12(accessory, rel1, rel2);
+                else if (rel1 != 0 && rel2 == 0)
+                    DrawFireFirstHalfRoute(accessory, rel1);
+            }
+            else if (n == 3)
+            {
+                var rel1 = _fireGuideRels[0];
+                var rel2 = _fireGuideRels[1];
+                var rel3 = _fireGuideRels[2];
+                if (rel1 == 0 && rel2 != 0 && rel3 != 0)
+                    DrawFireFullRouteFrom23(accessory, rel2, rel3);
+            }
+            else if (n == 4)
+            {
+                var rel1 = _fireGuideRels[0];
+                var rel2 = _fireGuideRels[1];
+                var rel3 = _fireGuideRels[2];
+                var rel4 = _fireGuideRels[3];
+                if (rel1 == 0 && rel2 == 0 && rel3 != 0 && rel4 != 0)
+                    DrawFireFullRouteFrom34(accessory, rel3, rel4);
+                else if (_fireFirstHalfDrawn && rel1 != 0 && rel2 == 0 && rel4 != 0)
+                    DrawFireSecondHalfRoute(accessory, rel1, rel4);
+            }
+        }
+
+        private void DrawFireFullRouteFrom12(ScriptAccessory accessory, int rel1, int rel2)
+        {
+            var clockwise = rel1 == rel2;
+            var dir4 = FireDir4FromRelPair(rel1, rel2);
+            var lateSafeCol = _fireCandidateRightCol + (rel2 == 1 ? 1 : 0);
+            var earlyDangerCol = _fireCandidateLeftCol + (rel1 == 1 ? 0 : 1);
+            DrawFireFullRoute(accessory, "Full12", dir4, clockwise, FireDelayForColumn(lateSafeCol) - FireWaveIntervalMs, FireDelayForColumn(earlyDangerCol));
+        }
+
+        private void DrawFireFullRouteFrom23(ScriptAccessory accessory, int rel2, int rel3)
+        {
+            var clockwise = rel2 != rel3;
+            var dir4 = FireDir4FromRelPair(rel3, rel2);
+            var lateSafeCol = _fireCandidateLeftCol + (rel3 == 1 ? 1 : 0);
+            var earlyDangerCol = _fireCandidateRightCol + (rel2 == 1 ? 0 : 1);
+            DrawFireFullRoute(accessory, "Full23", dir4, clockwise, FireDelayForColumn(lateSafeCol) - FireWaveIntervalMs, FireDelayForColumn(earlyDangerCol));
+        }
+
+        private void DrawFireFullRouteFrom34(ScriptAccessory accessory, int rel3, int rel4)
+        {
+            var clockwise = rel3 == rel4;
+            var dir4 = FireDir4FromRelPair(rel3, rel4);
+            var lateSafeCol = _fireCandidateRightCol + (rel4 == 1 ? 1 : 0);
+            var earlyDangerCol = _fireCandidateLeftCol + (rel3 == 1 ? 0 : 1);
+            DrawFireFullRoute(accessory, "Full34", dir4, clockwise, FireDelayForColumn(lateSafeCol) - FireWaveIntervalMs, FireDelayForColumn(earlyDangerCol));
+        }
+
+        private void DrawFireFirstHalfRoute(ScriptAccessory accessory, int rel1)
+        {
+            var dirN4 = rel1 == 1 ? 3 : 1;
+            var from = FireDiagonalPoint(dirN4);
+            var to = _fireSafeCenter + (_fireSafeCenter - from);
+            var delay = Math.Max(0, FireDelayForColumn(_fireCandidateRightCol + 1) - FireWaveIntervalMs);
+            var total = Math.Max(FireGuideDurationMs, delay + 5000);
+
+            DrawFirePoint(accessory, "FirstHalf_From", from, FireRoutePointRadius, 0, total, FireRouteColor.V4);
+            DrawFirePoint(accessory, "FirstHalf_To", to, FireRoutePointRadius, 0, total, FireSafeColor.V4);
+            DrawFireRouteLine(accessory, "FirstHalf_Line", from, to, 0, total, FireRouteColor.V4);
+            DrawFireGuideTo(accessory, "FirstHalf_Wait", from, 0, Math.Max(1, delay), FireRouteColor.V4);
+            DrawFireGuideTo(accessory, "FirstHalf_Cross", to, delay, Math.Max(1, total - delay), FireSafeColor.V4);
+            _fireFirstHalfDrawn = true;
+
+            if (FireSafeDebug)
+                accessory.Method.SendChat($"/e [地火安全] 路线14前半 dirN4={dirN4} delay={delay}ms");
+        }
+
+        private void DrawFireSecondHalfRoute(ScriptAccessory accessory, int rel1, int rel4)
+        {
+            var clockwise = rel1 == rel4;
+            var dir4 = FireDir4FromRelPair(rel1, rel4);
+            var route = FireFullRouteCardinals(dir4, clockwise);
+            var p2 = FireCardinalPoint(route[1]);
+            var p3 = FireCardinalPoint(route[2]);
+            var delay = Math.Max(0, FireDelayForColumn(_fireCandidateLeftCol + (rel1 == 1 ? 0 : 1)));
+            var total = Math.Max(FireGuideDurationMs, delay + 5000);
+
+            DrawFirePoint(accessory, "SecondHalf_P2", p2, FireRoutePointRadius, 0, total, FireRouteColor.V4);
+            DrawFirePoint(accessory, "SecondHalf_P3", p3, FireRoutePointRadius, 0, total, FireSafeColor.V4);
+            DrawFireRouteLine(accessory, "SecondHalf_Line", p2, p3, 0, total, FireRouteColor.V4);
+            DrawFireGuideTo(accessory, "SecondHalf_Wait", p2, 0, Math.Max(1, delay), FireRouteColor.V4);
+            DrawFireGuideTo(accessory, "SecondHalf_Cross", p3, delay, Math.Max(1, total - delay), FireSafeColor.V4);
+            _fireRouteCompleted = true;
+
+            if (FireSafeDebug)
+                accessory.Method.SendChat($"/e [地火安全] 路线14后半 dir4={dir4} clockwise={clockwise} delay={delay}ms");
+        }
+
+        private void DrawFireInitialPoint(ScriptAccessory accessory, int n, int rel)
+        {
+            var dirN4 = n == 2 ? (rel == 1 ? 2 : 0) : (rel == 1 ? 3 : 1);
+            var pos = FireDiagonalPoint(dirN4);
+            DrawFirePoint(accessory, "InitialPoint", pos, FireRoutePointRadius, 0, FireInitialPointDurationMs, FireRouteColor.V4);
+            DrawFireGuideTo(accessory, "InitialGuide", pos, 0, FireInitialPointDurationMs, FireRouteColor.V4);
+
+            if (FireSafeDebug)
+                accessory.Method.SendChat($"/e [地火安全] 初始斜点 n={n} rel={rel} dirN4={dirN4}");
+        }
+
+        private void DrawFireFullRoute(ScriptAccessory accessory, string suffix, int dir4, bool clockwise, int delay1, int delay2)
+        {
+            RemoveFireInitialPointDraws(accessory);
+
+            delay1 = Math.Max(0, delay1);
+            delay2 = Math.Max(delay1 + 1, delay2);
+            var total = Math.Max(FireGuideDurationMs, delay2 + 5000);
+            var route = FireFullRouteCardinals(dir4, clockwise);
+            var p1 = FireCardinalPoint(route[0]);
+            var p2 = FireCardinalPoint(route[1]);
+            var p3 = FireCardinalPoint(route[2]);
+
+            DrawFirePoint(accessory, $"{suffix}_P1", p1, FireRoutePointRadius, 0, total, FireRouteColor.V4);
+            DrawFirePoint(accessory, $"{suffix}_P2", p2, FireRoutePointRadius, 0, total, FireRouteColor.V4);
+            DrawFirePoint(accessory, $"{suffix}_P3", p3, FireRoutePointRadius, 0, total, FireSafeColor.V4);
+            DrawFireRouteLine(accessory, $"{suffix}_Line12", p1, p2, 0, total, FireRouteColor.V4);
+            DrawFireRouteLine(accessory, $"{suffix}_Line23", p2, p3, 0, total, FireSafeColor.V4);
+            DrawFireGuideTo(accessory, $"{suffix}_Guide1", p1, 0, Math.Max(1, delay1), FireRouteColor.V4);
+            DrawFireGuideTo(accessory, $"{suffix}_Guide2", p2, delay1, Math.Max(1, delay2 - delay1), FireRouteColor.V4);
+            DrawFireGuideTo(accessory, $"{suffix}_Guide3", p3, delay2, Math.Max(1, total - delay2), FireSafeColor.V4);
+            _fireRouteCompleted = true;
+
+            if (FireSafeDebug)
+                accessory.Method.SendChat($"/e [地火安全] {suffix} dir4={dir4} clockwise={clockwise} delay1={delay1}ms delay2={delay2}ms");
+        }
+
+        private void DrawFirePoint(ScriptAccessory accessory, string suffix, Vector3 pos, float radius, int delayMs, int durationMs, Vector4 color)
+        {
+            if (durationMs <= 0)
+                return;
+
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = $"{FireSafePrefix}_{suffix}";
+            dp.Position = pos;
+            dp.Scale = new Vector2(radius);
+            dp.Color = color;
+            dp.Delay = delayMs;
+            dp.DestoryAt = durationMs;
+            dp.ScaleMode = ScaleMode.None;
+            accessory.Method.SendDraw(DM, DrawTypeEnum.Circle, dp);
+        }
+
+        private void DrawFireGuideTo(ScriptAccessory accessory, string suffix, Vector3 target, int delayMs, int durationMs, Vector4 color)
+        {
+            if (durationMs <= 0)
+                return;
+
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = $"{FireSafePrefix}_{suffix}";
+            dp.Owner = accessory.Data.Me;
+            dp.TargetPosition = target;
+            dp.Scale = new Vector2(FireGuideWidth);
+            dp.ScaleMode = ScaleMode.YByDistance;
+            dp.Color = color;
+            dp.Delay = delayMs;
+            dp.DestoryAt = durationMs;
+            accessory.Method.SendDraw(DMG, DrawTypeEnum.Displacement, dp);
+        }
+
+        private void DrawFireRouteLine(ScriptAccessory accessory, string suffix, Vector3 from, Vector3 to, int delayMs, int durationMs, Vector4 color)
+        {
+            if (durationMs <= 0)
+                return;
+
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = $"{FireSafePrefix}_{suffix}";
+            dp.Position = from;
+            dp.TargetPosition = to;
+            dp.Scale = new Vector2(FireRouteLineWidth);
+            dp.ScaleMode = ScaleMode.YByDistance;
+            dp.Color = color;
+            dp.Delay = delayMs;
+            dp.DestoryAt = durationMs;
+            accessory.Method.SendDraw(DMG, DrawTypeEnum.Displacement, dp);
+        }
+
+        private void RemoveFireSafeGuideDraws(ScriptAccessory accessory)
+        {
+            accessory.Method.RemoveDraw($"{FireSafePrefix}_.*");
+        }
+
+        private void RemoveFireInitialPointDraws(ScriptAccessory accessory)
+        {
+            accessory.Method.RemoveDraw($"{FireSafePrefix}_Initial.*");
+        }
+
+        private FireSafeStrategy ResolveFireSafeStrategy(ScriptAccessory accessory)
+        {
+            if (FireSafeDirection != FireSafeStrategy.Auto)
+                return FireSafeDirection;
+
+            var partyIndex = accessory.Data.PartyList.IndexOf(accessory.Data.Me);
+            return partyIndex >= 0 && partyIndex < FireAutoStrategies.Length ? FireAutoStrategies[partyIndex] : FireSafeStrategy.Center;
+        }
+
+        private static (int Left, int Right) FireCandidateColumns(FireSafeStrategy strategy)
+        {
+            return strategy switch
+            {
+                FireSafeStrategy.Center => (3, 3),
+                FireSafeStrategy.Up => (4, 2),
+                FireSafeStrategy.Down => (2, 4),
+                FireSafeStrategy.Left => (2, 2),
+                FireSafeStrategy.Right => (4, 4),
+                FireSafeStrategy.LeftUp => (3, 1),
+                FireSafeStrategy.RightUp => (5, 3),
+                FireSafeStrategy.LeftDown => (1, 3),
+                FireSafeStrategy.RightDown => (3, 5),
+                _ => (0, 0)
+            };
+        }
+
+        private static Vector3 FireSafeCenter(int leftCol, int rightCol)
+        {
+            return new Vector3(70f + 5f * leftCol + 5f * rightCol, 0f, 100f - 5f * leftCol + 5f * rightCol);
+        }
+
+        private static int FireInitialColumn(float x)
+        {
+            return PositiveMod((int)MathF.Round((x - 70f) / 5f), 7) + 1;
+        }
+
+        private static int FireDelayForColumn(int col)
+        {
+            return FireHitBaseMs + FireHitIntervalMs * col;
+        }
+
+        private static int FireDir4FromRelPair(int firstRel, int secondRel)
+        {
+            return (firstRel, secondRel) switch
+            {
+                (1, 1) => 3,
+                (1, 2) => 0,
+                (2, 1) => 2,
+                (2, 2) => 1,
+                _ => 0
+            };
+        }
+
+        private static int[] FireFullRouteCardinals(int dir4, bool clockwise)
+        {
+            return (dir4, clockwise) switch
+            {
+                (0, false) => new[] { 0, 1, 2 },
+                (0, true) => new[] { 0, 3, 2 },
+                (1, false) => new[] { 1, 2, 3 },
+                (1, true) => new[] { 1, 0, 3 },
+                (2, false) => new[] { 2, 3, 0 },
+                (2, true) => new[] { 2, 1, 0 },
+                (3, false) => new[] { 3, 0, 1 },
+                (3, true) => new[] { 3, 2, 1 },
+                _ => new[] { 0, 1, 2 }
+            };
+        }
+
+        private Vector3 FireCardinalPoint(int cardinal)
+        {
+            return _fireSafeCenter + FireCardinalOffset(cardinal);
+        }
+
+        private static Vector3 FireCardinalOffset(int cardinal)
+        {
+            return cardinal switch
+            {
+                0 => new Vector3(0f, 0f, -FireRouteOffset),
+                1 => new Vector3(-FireRouteOffset, 0f, 0f),
+                2 => new Vector3(0f, 0f, FireRouteOffset),
+                3 => new Vector3(FireRouteOffset, 0f, 0f),
+                _ => Vector3.Zero
+            };
+        }
+
+        private Vector3 FireDiagonalPoint(int dirN4)
+        {
+            var offset = dirN4 switch
+            {
+                0 => new Vector3(-FireDiagonalComponentOffset, 0f, -FireDiagonalComponentOffset),
+                1 => new Vector3(-FireDiagonalComponentOffset, 0f, FireDiagonalComponentOffset),
+                2 => new Vector3(FireDiagonalComponentOffset, 0f, FireDiagonalComponentOffset),
+                3 => new Vector3(FireDiagonalComponentOffset, 0f, -FireDiagonalComponentOffset),
+                _ => Vector3.Zero
+            };
+            return _fireSafeCenter + offset;
         }
 
         #endregion
@@ -357,6 +762,8 @@ namespace ErrerScriptNamespace
             eventCondition: ["ActionId:47934"], userControl: false)]
         public void OnCastSpread(Event @event, ScriptAccessory accessory)
         {
+            RemoveFireSafeGuideDraws(accessory);
+
             if (!EnableCastSpread) return;
 
             var durationMs = DurationMs(@event, 4700) + 1000;
@@ -834,8 +1241,11 @@ namespace ErrerScriptNamespace
                     }
                     else if (_floodGroupCount == 2)
                     {
-                        if (_savedFloodSafe1.HasValue && _savedFloodMid1.HasValue)
-                            DrawFloodRoute(accessory, safePos, _savedFloodMid1.Value, _savedFloodSafe1.Value);
+                        if (_savedFloodSafe1.HasValue && EnableFloodMidNode)
+                        {
+                            var routeMid = _savedFloodMid1 ?? BuildFloodRouteMidFallback(safePos, _savedFloodSafe1.Value);
+                            DrawFloodRoute(accessory, safePos, routeMid, _savedFloodSafe1.Value);
+                        }
                         else
                         {
                             DrawFloodSafe(accessory, safePos, 2, Flood2DelayMs, Flood2DurationMs);
@@ -880,6 +1290,30 @@ namespace ErrerScriptNamespace
             return true;
         }
 
+        private static Vector3 BuildFloodRouteMidFallback(Vector3 from, Vector3 to)
+        {
+            var fromDelta = from - ArenaCenter;
+            var toDelta = to - ArenaCenter;
+            var guideDelta = fromDelta + toDelta;
+            if (guideDelta.Length() < 0.001f)
+                guideDelta = toDelta.Length() >= fromDelta.Length() ? toDelta : fromDelta;
+
+            var radius = MathF.Max(fromDelta.Length(), toDelta.Length());
+            if (radius < 0.001f)
+                return ArenaCenter;
+
+            if (MathF.Abs(guideDelta.X) >= MathF.Abs(guideDelta.Z))
+            {
+                var north = new Vector3(ArenaCenter.X, 0f, ArenaCenter.Z - radius);
+                var south = new Vector3(ArenaCenter.X, 0f, ArenaCenter.Z + radius);
+                return Vector3.Distance(from, north) <= Vector3.Distance(from, south) ? north : south;
+            }
+
+            var west = new Vector3(ArenaCenter.X - radius, 0f, ArenaCenter.Z);
+            var east = new Vector3(ArenaCenter.X + radius, 0f, ArenaCenter.Z);
+            return Vector3.Distance(from, west) <= Vector3.Distance(from, east) ? west : east;
+        }
+
         private void DrawFloodRoute(ScriptAccessory a, Vector3 safe2, Vector3 mid, Vector3 safe1)
         {
             var secondStart = Math.Max(0, Flood2DelayMs);
@@ -891,10 +1325,10 @@ namespace ErrerScriptNamespace
                 secondResolve = endAt;
             var displayDuration = endAt;
 
-            var inactive = new Vector4(0.35f, 0.35f, 0.35f, 0.65f);
-            var active = new Vector4(0f, 1f, 1f, 1f);
-            var midActive = new Vector4(0f, 1f, 0.4f, 1f);
-            var finalActive = new Vector4(0f, 1f, 0f, 1f);
+            var inactive = FloodRouteInactiveColor.V4;
+            var active = FloodRouteStartColor.V4;
+            var midActive = FloodRouteMidColor.V4;
+            var finalActive = FloodRouteFinalColor.V4;
 
             DrawFloodRoutePoint(a, "Route2_Base", safe2, 1.35f, 0, displayDuration, inactive);
             DrawFloodRoutePoint(a, "RouteMid_Base", mid, 1.2f, 0, displayDuration, inactive);
@@ -1030,6 +1464,11 @@ namespace ErrerScriptNamespace
         private static Vector3 RotationToDirection(float radians)
         {
             return new Vector3(MathF.Sin(radians), 0f, MathF.Cos(radians));
+        }
+
+        private static int PositiveMod(int value, int mod)
+        {
+            return (value % mod + mod) % mod;
         }
 
         private static bool TryParseObjectId(string str, out uint id)
