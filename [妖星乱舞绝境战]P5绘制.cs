@@ -15,7 +15,7 @@ namespace ErrerScriptNamespace
         name: "[妖星乱舞绝境战]P5全流程绘制",
         territorys: [1363],
         guid: "b3f7c1a2-8d4e-4f6a-9c12-5e8a1b3d7f90",
-        version: "0.0.19",
+        version: "0.0.22",
         author: "Errer",
         note: "P5全套：地火步进圈 + 钢铁月环 + 地水/洪水2穿1安全点 + 核爆/神圣分散。\n" +
               "更新三星踩塔指路、地火安全点引导、地火后分散绘制，修复地水路线中间点与Imgui指路。")]
@@ -264,6 +264,9 @@ namespace ErrerScriptNamespace
         private readonly float[] _floodSeqRot = new float[4]; private int _seqCount;
         private Vector3? _savedFloodSafe1;
         private Vector3? _savedFloodMid1;
+        // 框架每个事件处理器独立线程(ScriptManager 每方法一线程,无序列化)，配对读条会并发进入 OnWater，
+        // 必须加锁串行化洪水状态变更，避免丢失更新(_floodCount/计数器/数组竞态)。
+        private readonly object _floodLock = new object();
 
         #endregion
 
@@ -591,7 +594,7 @@ namespace ErrerScriptNamespace
             dp.Color = color;
             dp.Delay = delayMs;
             dp.DestoryAt = durationMs;
-            accessory.Method.SendDraw(DMG, DrawTypeEnum.Displacement, dp);
+            accessory.Method.SendDraw(DMG, DrawTypeEnum.Arrow, dp);
         }
 
         private void RemoveFireSafeGuideDraws(ScriptAccessory accessory)
@@ -1141,6 +1144,9 @@ namespace ErrerScriptNamespace
             var pos = JsonConvert.DeserializeObject<Vector3>(@event["SourcePosition"]);
             var rot = float.Parse(@event["SourceRotation"]);
 
+            // 配对读条并发进入，串行化全部洪水状态变更，杜绝丢失更新
+            lock (_floodLock)
+            {
             _floodCount++;
 
             if (FloodDebug)
@@ -1183,9 +1189,15 @@ namespace ErrerScriptNamespace
                     _posCount++;
                 }
 
+                if (FloodDebug)
+                    accessory.Method.SendChat($"/e [洪水] 读条#{_floodCount} rot={rot:F3} {(rot < 0f ? "负" : "正")} seq={_seqCount} neg={_negCount} pos={_posCount}");
+
                 if (_negCount >= 1 && _posCount >= 1 && _negCount + _posCount >= 4)
                 {
                     _floodGroupCount++;
+
+                    if (FloodDebug)
+                        accessory.Method.SendChat($"/e [洪水] 触发配对 groupCount={_floodGroupCount} saved1={( _savedFloodSafe1.HasValue ? "有" : "无")} midNode={EnableFloodMidNode}");
 
                     // 遍历所有 neg×pos 组合，取距场中最近的交点
                     Vector3? best = null; float bestDist = float.MaxValue;
@@ -1211,6 +1223,8 @@ namespace ErrerScriptNamespace
                     {
                         if (FloodDebug)
                             accessory.Method.SendChat($"/e [洪水] 组{_floodGroupCount} 交点距场中={bestDist:F1}m 超出阈值{FloodMaxDist:F1}m ✗");
+                        // 该组交点无效，回滚 groupCount，避免占用有效组编号导致 组1保存/组2绘制 配对错位
+                        _floodGroupCount--;
                         _negCount = 0; _posCount = 0;
                         _seqCount = 0;
                         return;
@@ -1260,6 +1274,7 @@ namespace ErrerScriptNamespace
                     _seqCount = 0;
                 }
             }
+            } // lock (_floodLock)
         }
 
         private bool TryBuildFloodMidNode(Vector3 safePos, int bestNegIndex, int bestPosIndex, out Vector3 node)
@@ -1391,7 +1406,7 @@ namespace ErrerScriptNamespace
             dp.Color = color;
             dp.Delay = delayMs;
             dp.DestoryAt = durationMs;
-            a.Method.SendDraw(DMG, DrawTypeEnum.Displacement, dp);
+            a.Method.SendDraw(DMG, DrawTypeEnum.Arrow, dp);
         }
 
         private void DrawFloodSafe(ScriptAccessory a, Vector3 pos, int idx, int delayMs, int durationMs, Vector3? midPos = null)
