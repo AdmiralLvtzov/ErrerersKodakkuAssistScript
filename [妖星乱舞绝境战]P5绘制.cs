@@ -8,6 +8,7 @@ using KodakkuAssist.Module.GameEvent;
 using KodakkuAssist.Module.GameOperate;
 using KodakkuAssist.Script;
 using Newtonsoft.Json;
+using Dalamud.Utility.Numerics;
 
 namespace ErrerScriptNamespace
 {
@@ -15,10 +16,11 @@ namespace ErrerScriptNamespace
         name: "[妖星乱舞绝境战]P5全流程绘制",
         territorys: [1363],
         guid: "b3f7c1a2-8d4e-4f6a-9c12-5e8a1b3d7f90",
-        version: "0.0.22",
+        version: "0.0.23",
         author: "Errer",
         note: "P5全套：地火步进圈 + 钢铁月环 + 地水/洪水2穿1安全点 + 核爆/神圣分散。\n" +
-              "更新三星踩塔指路、地火安全点引导、地火后分散绘制，修复地水路线中间点与Imgui指路。")]
+              "更新三星踩塔指路、地火安全点引导、地火后分散绘制，修复地水路线中间点与Imgui指路。"+
+              "更新癫狂交响曲的绘制。")]
     public class YW_P5FireScript
     {
         public enum FireSafeStrategy
@@ -160,6 +162,11 @@ namespace ErrerScriptNamespace
 
         [UserSetting("神圣黄色")]
         public ScriptColor SpreadColor { get; set; } = new ScriptColor { V4 = new Vector4(1.0f, 1.0f, 0.0f, 0.35f) };
+        
+        [UserSetting("癫狂交响曲 分摊的颜色")]
+        public ScriptColor colourOfDirectionIndicators { get; set; } = new() { V4 = new Vector4(1,1,0,1) }; // Yellow by default.
+        [UserSetting("癫狂交响曲 死刑的颜色")]
+        public ScriptColor colourOfExtremelyDangerousAttacks { get; set; } = new() { V4 = new Vector4(1,0,0,1) }; // Red by default.
 
         #endregion
 
@@ -1474,6 +1481,367 @@ namespace ErrerScriptNamespace
 
         #endregion
 
+        #region 癫狂交响曲
+        
+        private const int MAXIMUM_DURATION=7200000;
+
+        [ScriptMethod(name:"P5 癫狂交响曲 神圣 (范围)",
+            eventType:EventTypeEnum.StartCasting,
+            eventCondition:["ActionId:47952"])]
+
+        public void P5_癫狂交响曲_神圣_范围(Event @event,ScriptAccessory accessory) {
+            
+            if(!convertObjectIdToDecimal(@event["SourceId"],out var sourceId)) {
+                
+                return;
+                
+            }
+            
+            var currentProperties=accessory.Data.GetDefaultDrawProperties();
+
+            for(uint i=3;i<=8;++i) {
+                
+                currentProperties=accessory.Data.GetDefaultDrawProperties();
+
+                currentProperties.Scale=new(5);
+                currentProperties.Owner=sourceId;
+                currentProperties.CentreResolvePattern=PositionResolvePatternEnum.OwnerEnmityOrder;
+                currentProperties.CentreOrderIndex=i;
+                currentProperties.Color=accessory.Data.DefaultDangerColor;
+                currentProperties.DestoryAt=5875;
+        
+                accessory.Method.SendDraw(DrawModeEnum.Default,DrawTypeEnum.Circle,currentProperties);
+                
+            }
+            
+            for(uint i=1;i<=3;++i) {
+                
+                currentProperties=accessory.Data.GetDefaultDrawProperties();
+
+                currentProperties.Scale=new(5);
+                currentProperties.Owner=sourceId;
+                currentProperties.CentreResolvePattern=PositionResolvePatternEnum.PlayerNearestOrder;
+                currentProperties.CentreOrderIndex=i;
+                currentProperties.Color=accessory.Data.DefaultDangerColor;
+                currentProperties.Delay=5875;
+                currentProperties.DestoryAt=3125;
+        
+                accessory.Method.SendDraw(DrawModeEnum.Default,DrawTypeEnum.Circle,currentProperties);
+                
+            }
+
+        }
+        
+        [ScriptMethod(name:"P5 癫狂交响曲 核爆与混沌核爆 (范围)",
+            eventType:EventTypeEnum.StartCasting,
+            eventCondition:["ActionId:47952"])]
+
+        public void P5_癫狂交响曲_核爆与混沌核爆_范围(Event @event,ScriptAccessory accessory) {
+            
+            if(!convertObjectIdToDecimal(@event["SourceId"],out var sourceId)) {
+                
+                return;
+                
+            }
+            
+            var currentProperties=accessory.Data.GetDefaultDrawProperties();
+
+            for(uint i=1;i<=2;++i) {
+                
+                currentProperties=accessory.Data.GetDefaultDrawProperties();
+
+                currentProperties.Scale=new(5);
+                currentProperties.Owner=sourceId;
+                currentProperties.CentreResolvePattern=PositionResolvePatternEnum.OwnerEnmityOrder;
+                currentProperties.CentreOrderIndex=i;
+                currentProperties.Color=colourOfExtremelyDangerousAttacks.V4.WithW(1);
+                currentProperties.DestoryAt=5875;
+        
+                accessory.Method.SendDraw(DrawModeEnum.Default,DrawTypeEnum.Circle,currentProperties);
+                
+            }
+            
+            currentProperties=accessory.Data.GetDefaultDrawProperties();
+
+            currentProperties.Scale=new(5);
+            currentProperties.Owner=sourceId;
+            currentProperties.CentreResolvePattern=PositionResolvePatternEnum.OwnerEnmityOrder;
+            currentProperties.CentreOrderIndex=1;
+            currentProperties.Delay=5875;
+            currentProperties.DestoryAt=3125;
+            
+            int myIndex=accessory.Data.PartyList.IndexOf(accessory.Data.Me);
+            
+            if(!isLegalPartyIndex(myIndex)) {
+
+                currentProperties.Color=accessory.Data.DefaultDangerColor;
+
+            }
+
+            else {
+
+                if(isTank(myIndex)) {
+                    
+                    currentProperties.Color=colourOfDirectionIndicators.V4.WithW(1);
+                    
+                }
+
+                else {
+                    
+                    currentProperties.Color=colourOfExtremelyDangerousAttacks.V4.WithW(1);
+                    
+                }
+                
+            }
+        
+            accessory.Method.SendDraw(DrawModeEnum.Default,DrawTypeEnum.Circle,currentProperties);
+
+        }
+        
+        [ScriptMethod(name:"P5 癫狂交响曲 顺手加个神圣 (范围)",
+            eventType:EventTypeEnum.StatusAdd,
+            eventCondition:["StatusID:5351"])]
+
+        public void P5_癫狂交响曲_顺手加个神圣_范围(Event @event,ScriptAccessory accessory) {
+            
+            if(string.Equals(@event["SourceId"],"00000000")) {
+
+                return;
+
+            }
+            
+            if(!convertObjectIdToDecimal(@event["TargetId"],out var targetId)) {
+                
+                return;
+                
+            }
+            
+            int durationMilliseconds=0;
+
+            try {
+
+                durationMilliseconds=JsonConvert.DeserializeObject<int>(@event["DurationMilliseconds"]);
+
+            } catch(Exception e) {
+                
+                accessory.Log.Error("DurationMilliseconds deserialization failed.");
+
+                return;
+
+            }
+
+            if(durationMilliseconds<=0||durationMilliseconds>MAXIMUM_DURATION) {
+
+                return;
+
+            }
+            
+            int standardDuration=3375;
+            int delay=0;
+            int duration=0;
+
+            if(durationMilliseconds<=standardDuration) {
+
+                delay=0;
+                duration=durationMilliseconds;
+
+            }
+
+            else {
+
+                delay=durationMilliseconds-standardDuration;
+                duration=standardDuration;
+
+            }
+            
+            var currentProperties=accessory.Data.GetDefaultDrawProperties();
+
+            currentProperties.Name=$"P5_癫狂交响曲_顺手加个神圣_范围_{targetId}";
+            currentProperties.Scale=new(6);
+            currentProperties.Owner=targetId;
+            currentProperties.Color=colourOfDirectionIndicators.V4.WithW(1);
+            currentProperties.Delay=delay;
+            currentProperties.DestoryAt=duration;
+            
+            accessory.Method.SendDraw(DrawModeEnum.Default,DrawTypeEnum.Circle,currentProperties);
+            
+        }
+        
+        [ScriptMethod(name:"P5 癫狂交响曲 顺手加个神圣 (范围清除)",
+            eventType:EventTypeEnum.StatusRemove,
+            eventCondition:["StatusID:5351"],
+            userControl:false)]
+
+        public void P5_癫狂交响曲_顺手加个神圣_范围清除(Event @event,ScriptAccessory accessory) {
+            
+            if(string.Equals(@event["SourceId"],"00000000")) {
+
+                return;
+
+            }
+            
+            if(!convertObjectIdToDecimal(@event["TargetId"],out var targetId)) {
+                
+                return;
+                
+            }
+            
+            accessory.Method.RemoveDraw($"P5_癫狂交响曲_顺手加个神圣_范围_{targetId}");
+            
+        }
+        
+        [ScriptMethod(name:"P5 癫狂交响曲 顺手加个核爆 (范围)",
+            eventType:EventTypeEnum.StatusAdd,
+            eventCondition:["StatusID:5350"])]
+
+        public void P5_癫狂交响曲_顺手加个核爆_范围(Event @event,ScriptAccessory accessory) {
+            
+            if(string.Equals(@event["SourceId"],"00000000")) {
+
+                return;
+
+            }
+            
+            if(!convertObjectIdToDecimal(@event["TargetId"],out var targetId)) {
+                
+                return;
+                
+            }
+            
+            int durationMilliseconds=0;
+
+            try {
+
+                durationMilliseconds=JsonConvert.DeserializeObject<int>(@event["DurationMilliseconds"]);
+
+            } catch(Exception e) {
+                
+                accessory.Log.Error("DurationMilliseconds deserialization failed.");
+
+                return;
+
+            }
+
+            if(durationMilliseconds<=0||durationMilliseconds>MAXIMUM_DURATION) {
+
+                return;
+
+            }
+            
+            int standardDuration=3375;
+            int delay=0;
+            int duration=0;
+
+            if(durationMilliseconds<=standardDuration) {
+
+                delay=0;
+                duration=durationMilliseconds;
+
+            }
+
+            else {
+
+                delay=durationMilliseconds-standardDuration;
+                duration=standardDuration;
+
+            }
+            
+            var currentProperties=accessory.Data.GetDefaultDrawProperties();
+
+            currentProperties.Name=$"P5_癫狂交响曲_顺手加个核爆_范围_{targetId}";
+            currentProperties.Scale=new(25);
+            currentProperties.Owner=targetId;
+            currentProperties.Color=accessory.Data.DefaultDangerColor;
+            currentProperties.Delay=delay;
+            currentProperties.DestoryAt=duration;
+            
+            accessory.Method.SendDraw(DrawModeEnum.Default,DrawTypeEnum.Circle,currentProperties);
+            
+        }
+        
+        [ScriptMethod(name:"P5 癫狂交响曲 顺手加个核爆 (范围清除)",
+            eventType:EventTypeEnum.StatusRemove,
+            eventCondition:["StatusID:5350"],
+            userControl:false)]
+
+        public void P5_癫狂交响曲_顺手加个核爆_范围清除(Event @event,ScriptAccessory accessory) {
+            
+            if(string.Equals(@event["SourceId"],"00000000")) {
+
+                return;
+
+            }
+            
+            if(!convertObjectIdToDecimal(@event["TargetId"],out var targetId)) {
+                
+                return;
+                
+            }
+            
+            accessory.Method.RemoveDraw($"P5_癫狂交响曲_顺手加个核爆_范围_{targetId}");
+            
+        }
+        
+        public static bool convertObjectIdToDecimal(string? rawObjectId,out ulong result) {
+            
+            result=0;
+
+            if(string.IsNullOrWhiteSpace(rawObjectId)) {
+                
+                return false;
+                
+            }
+
+            string objectId=rawObjectId.Trim();
+            
+            objectId=objectId.StartsWith("0x",StringComparison.OrdinalIgnoreCase)?objectId.Substring(2):objectId;
+            
+            return ulong.TryParse(objectId,System.Globalization.NumberStyles.HexNumber,null,out result);
+            
+        }
+        
+        public static bool isLegalPartyIndex(int partyIndex) {
+
+            return (0<=partyIndex&&partyIndex<=7);
+
+        }
+        
+        public static bool isSupporter(int partyIndex) {
+
+            return partyIndex switch {
+
+                0 => true,
+                1 => true,
+                2 => true,
+                3 => true,
+                _ => false
+
+            };
+
+        }
+        
+        public static bool isMelee(int partyIndex) {
+
+            return partyIndex switch {
+
+                0 => true,
+                1 => true,
+                4 => true,
+                5 => true,
+                _ => false
+
+            };
+
+        }
+
+        public static bool isTank(int partyIndex) {
+            
+            return isSupporter(partyIndex)&&isMelee(partyIndex);
+            
+        }
+
+        #endregion
+        
         #region Helpers
 
         private static Vector3 RotationToDirection(float radians)
